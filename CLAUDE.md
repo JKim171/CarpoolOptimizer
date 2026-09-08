@@ -72,3 +72,7 @@ docs/              design document and roadmap
 - Routes store orderings, not schedules. Times are derived so a route survives a matrix refresh.
 - Solvers may be heuristic about quality, never about feasibility — every solver's output must pass
   `validate()`.
+- `Role.EITHER` is **dormant by decision, not dead code.** It is fully implemented and tested, but
+  the MVP roster UI does not offer it (`docs/design.md` §2.3). Do not remove it for being unused.
+  Note that while it stays unsurfaced, the driver set is fixed and the `vehicle` objective weight
+  has no effect on any result.
