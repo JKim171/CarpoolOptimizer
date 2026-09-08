@@ -67,6 +67,8 @@ The most important week in the plan.
 
 - Next.js. Three screens: create event · roster table (fast bulk entry — name, pickup, driver?,
   seats, priority) · results view with MapLibre routes and a per-driver pickup/dropoff order.
+- Roster offers two roles only, driving or needs-a-ride. Flexible drivers stay unsurfaced for the
+  first real event (`design.md` §2.3).
 - Roster entry is the whole UX problem here. It must be faster than the spreadsheet the coordinator
   uses today, or they will keep using the spreadsheet. Paste-from-clipboard is worth an hour.
 - Manual pin + re-optimize, so the coordinator can override the solver and keep going.

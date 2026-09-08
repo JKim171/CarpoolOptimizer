@@ -65,6 +65,30 @@ Alongside it, **manual pins** (`pinned_driver_id`) let an organizer force a spec
 re-optimize around it. Pins are how a human overrides the solver without abandoning it — which is
 what makes an optimizer usable by people who have their own reasons.
 
+### 2.3 Flexible drivers: built, deliberately not surfaced
+
+`Role.EITHER` -- someone who has a car but is willing to leave it at home -- is implemented,
+tested, and exercised by the property suite. **The MVP roster UI does not offer it.** Participants
+are either driving or need a ride, so the branch never executes at a real event yet.
+
+**Do not delete it as dead code.** It is dormant by decision, not by neglect.
+
+The decision it encodes is *who chooses how many cars go*:
+
+- **Coordinator chooses** (v1): they enter exactly who is driving. The system seats everyone into
+  those cars. Simple, and matches how club tennis works today.
+- **System chooses** (deferred): they enter everyone who *has* a car, and the system reports the
+  minimum number needed and which ones. Strictly more useful at a parking-constrained venue.
+
+A consequence worth knowing, because it is easy to miss: **with a fixed driver set, `w2` (vehicle
+count) is inert.** The number of cars is constant, so nothing the optimizer does can change it, and
+the whole parking argument for weighting `w2` highly (§2) only pays off once flexible drivers
+exist. Until then `w2` can be near zero without changing any result.
+
+**Trigger to surface it:** the coordinator, having seen a real run, answers yes to "would it help
+if the system told you the fewest cars you need?" The change is then one checkbox on the roster --
+"must drive" versus "can drive if needed" -- against code that already works.
+
 ### Honest framing
 
 At n ≈ 40 in a dense cluster, an exact solver runs in well under a second. The async job
@@ -677,18 +701,27 @@ else — their `pickup_geog` is where they start. So the outbound route is
 direct `home → venue` time. Assigning a driver passengers who live away from their own commute
 corridor is therefore already expensive under the objective; nothing special is needed to express it.
 
-**The return leg is a second sequencing problem, not a mirror of the first.** After the event the
-route is `venue → dropoff₁ → … → dropoffₖ → driver_home`, over the same node set with the driver's
-home as the *terminus*. Two orderings compete:
+**The return leg is sequenced independently, and the reason is asymmetry -- not fairness.**
+After the event the route is `venue -> dropoff1 -> ... -> dropoffk -> driver_home`, over the same
+node set with the driver's home as the *terminus*.
 
-- **Reversed** (last picked up is dropped first) minimizes total drive time — it is the reverse of
-  an optimal path, hence optimal under symmetric travel times.
-- **Same order** (first picked up is dropped first) is fairer: otherwise the passenger who is picked
-  up first also rides longest in *both* directions.
+The intuitive guess is that reversing the outbound order is merely a good approximation. It is
+better than that: under a **symmetric** travel matrix, reversal is exactly optimal, for drive time
+and total ride time both. With outbound edges `e0..ek` the occupancy runs `0,1,...,k`, so the ride
+sum is `1*e1 + 2*e2 + ... + k*ek`; reversed, occupancy runs `k,...,1,0` over the same edges in the
+opposite order and sums to precisely the same value. No ride weight can separate them.
 
-This is a genuine tradeoff between `w1` (drive time) and `w3` (passenger inconvenience), and the
-objective already resolves it — provided the return leg is sequenced independently rather than
-assumed. It costs nothing to do so: it is the same Held–Karp routine with a different terminus.
+What does separate them is that **real routing matrices are not symmetric**. One-way streets, turn
+restrictions, and divided highways all make `a -> b` differ from `b -> a`, and OSRM and ORS return
+asymmetric tables accordingly. Sequencing the return independently costs nothing -- the same
+Held-Karp routine with a different terminus -- and is the only way to exploit that.
+
+**A fairness note, stated honestly.** Reversal does mean the passenger collected first is also
+dropped last, riding longest in both directions. A *sum* of ride times is utilitarian by
+construction and cannot see this: it prices total burden, never its distribution. Expressing
+"nobody should ride far longer than anyone else" needs a different term -- a maximum ride time, or
+a squared penalty on it. That is a legitimate future refinement of the objective, and it is
+deliberately **not** claimed as current behaviour.
 
 Because every route terminates at the same node, a driver's outbound route is a **shortest
 Hamiltonian path** over their assigned pickups ending at the destination. For ≤ 8 stops — which covers every real
@@ -837,6 +870,7 @@ Postgres makes this mostly redundant at first, but the restore drill is worth do
 | Accounts | Organizers ask for event history across devices |
 | AWS ECS + Terraform | The project has proven itself and the migration is worth writing up |
 | A dedicated worker machine | One worker's solve queue backs up, or a runaway solve starves the API |
+| Flexible drivers (`Role.EITHER`, §2.3) | The coordinator wants the system to choose how many cars go, not just who rides in them |
 
 Migrating from a PaaS to ECS on Terraform is a *better* story than having started there, and it
 defers the cost until the project has earned it.
