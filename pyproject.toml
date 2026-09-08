@@ -1,0 +1,22 @@
+# Root config: tooling only. Packages live under packages/ and apps/.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages/domain/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ANN", "PT"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["ANN"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+mypy_path = "packages/domain/src"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/domain/tests"]
+addopts = "-q --strict-markers"
