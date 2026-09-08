@@ -47,7 +47,10 @@ def validate(instance: ProblemInstance, solution: Solution) -> list[Violation]:
             violations.append(
                 Violation("duplicate_assignment", f"assigned {count} times", participant_id)
             )
-    for participant_id in sorted(instance.ids - set(seen)):
+    # Someone who needs neither leg is arranging their own transport and is not part of the
+    # carpool at all, so their absence from the solution is correct rather than a violation.
+    needs_transport = {p.id for p in instance.participants if p.needs_outbound or p.needs_return}
+    for participant_id in sorted(needs_transport - set(seen)):
         violations.append(
             Violation("missing_assignment", "neither routed nor listed unassigned", participant_id)
         )

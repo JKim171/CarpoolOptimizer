@@ -23,6 +23,14 @@ EARTH_RADIUS_M = 6_371_000.0
 
 
 class Role(str, Enum):
+    """How a participant gets to the event.
+
+    `EITHER` -- has a car but is willing to ride instead -- is implemented and tested but not
+    offered by the MVP roster UI. It is dormant by decision, not dead code; see docs/design.md 2.3.
+    While no participant carries it the driver set is fixed, which makes the `vehicle` objective
+    weight inert.
+    """
+
     DRIVER = "driver"
     PASSENGER = "passenger"
     EITHER = "either"
@@ -175,9 +183,9 @@ class Route:
     Times are derived (see `schedule`), never stored here -- so a route stays valid when the travel
     matrix is refreshed, and two solvers producing the same ordering compare equal.
 
-    `inbound` is sequenced separately from `outbound` rather than assumed to be its reverse: the
-    reverse minimizes drive time, while the same order is fairer to whoever is picked up first.
-    Which one wins is decided by the objective weights (docs/design.md 8.2).
+    `inbound` is sequenced separately from `outbound` rather than assumed to be its reverse. Under
+    a symmetric matrix reversal is exactly optimal, but real routing matrices are asymmetric --
+    one-way streets and turn restrictions -- so the return earns its own pass (docs/design.md 8.2).
     """
 
     driver_id: str
