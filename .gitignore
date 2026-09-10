@@ -21,3 +21,6 @@ data/osrm/
 .terraform/
 crash.log
 *.tfplan
+
+# Session handoff notes — private, never committed
+docs/handoff.md
