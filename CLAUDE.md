@@ -24,6 +24,11 @@ credential.
   deliberate throwaways for a container bound to localhost. Never reuse that pattern for anything
   reachable from outside the machine.
 
+- Terraform state (`*.tfstate*`, `.terraform/`) is never committed — it can hold secrets in plain
+  text. It lives in the S3 backend.
+- No long-lived AWS access keys, anywhere: the developer uses SSO sessions, CI uses OIDC, the
+  instance uses its IAM role.
+
 GitHub secret scanning and push protection are enabled and will block a push containing a detected
 credential. Treat that as a backstop, not a safety net — it does not recognize every format.
 
