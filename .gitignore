@@ -14,3 +14,10 @@ node_modules/
 .env.local
 .DS_Store
 data/osrm/
+
+# Terraform — state can hold secrets; it lives in the S3 backend, never here
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+*.tfplan

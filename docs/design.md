@@ -1,7 +1,7 @@
 # CarpoolOptimizer — Design Document
 
 **Status:** Draft v3 · Last updated 2026-09-10
-**Context:** Portfolio project intended for real public deployment. See `roadmap.md` for the
+**Context:** Intended for real public deployment. See `roadmap.md` for the
 time-boxed delivery plan.
 
 ---
@@ -45,7 +45,7 @@ driving, and seats per car, then optimizes. This is how club tennis works today:
 already has the roster and already decides ride priority.
 
 **Model B — self-service join link.** The organizer shares a link; participants enter their own
-details. This is the scaling story — it is what makes the system a platform rather than a
+details. This is the scaling path — it is what makes the system a platform rather than a
 coordinator's tool, and it is where the interesting authorization and privacy work lives (§6.1,
 §6.2).
 
@@ -122,7 +122,7 @@ At n ≈ 40 in a dense cluster, an exact solver runs in well under a second. The
 infrastructure in this design is **not** justified by solver runtime. It is justified by travel
 matrix construction against a rate-limited external routing provider, and by the need for durable,
 retryable, idempotent job semantics when a solve is triggered from a phone on campus wifi. Claiming
-otherwise would not survive an interview.
+otherwise would be inaccurate. §4.2 lists the specific failure modes.
 
 Large-scale numbers (n = 1000) in this project come from **synthetic benchmarks**, and must always
 be described as such.
@@ -132,8 +132,7 @@ be described as such.
 Explicitly out of scope, with reasons:
 
 - **Microservices, Kubernetes, Kafka, gRPC, GraphQL, event sourcing** — no load or team-topology
-  justification exists at this scale. A modular monolith plus worker processes is correct here, and
-  being able to explain that choice is a stronger signal than reaching for the alternatives.
+  justification exists at this scale. A modular monolith plus worker processes is correct here.
 - **SMS notifications** — A2P 10DLC registration is weeks of compliance work.
 - **Payments / cost splitting** — touches TNC regulation.
 - **Multiple destinations per event** — destroys the structural property that makes §8 work.
@@ -152,7 +151,7 @@ Explicitly out of scope, with reasons:
 └──────────────────────┬─────────────────────────────────┘
                        │ REST/JSON  (+ polling; SSE later)
 ┌──────────────────────▼─────────────────────────────────┐
-│  FastAPI — modular monolith (AWS Lightsail, 1 VM)       │
+│  FastAPI — modular monolith (AWS EC2, 1 instance)       │
 │  api/      events · participants · jobs · solutions     │
 │  domain/   PURE. No I/O. Solver + objective + validator │
 │  adapters/ routing provider · mail · clock              │
@@ -160,7 +159,7 @@ Explicitly out of scope, with reasons:
        │                                  │
 ┌──────▼────────────────────┐   ┌─────────▼──────────────┐
 │ Postgres + PostGIS        │   │ Routing provider (iface)│
-│ (container on the same VM)│   │  · OSRM local (bench)   │
+│ (container, same instance)│   │  · OSRM local (bench)   │
 │  · domain tables          │   │  · ORS (prod)           │
 │  · job queue (SKIP LOCKED)│   │  · haversine (fallback) │
 │  · travel_cache           │   │                         │
@@ -208,9 +207,9 @@ Rationale:
   breaks the budget. This adds zero infrastructure.
 - **Correctness is easier.** Job state and domain data commit in the *same transaction*. With an
   external broker you have a dual-write problem between broker and database.
-- **It is the more interesting interview topic.** Lease-based visibility timeouts, at-least-once
-  delivery, idempotent effects, and crash recovery are all visible in code you wrote, rather than
-  configured in someone else's framework.
+- **The failure semantics are explicit.** Lease-based visibility timeouts, at-least-once delivery,
+  idempotent effects, and crash recovery live in this codebase, where they can be read and tested
+  directly, rather than in a framework's configuration.
 - Migration to Redis/Celery later is a swap behind the `JobQueue` interface, if load ever warrants it.
 
 Redis is added only when there is a measured reason: cross-instance SSE pub/sub, or a travel cache
@@ -306,7 +305,8 @@ contributors".
 
 PostgreSQL 16 + PostGIS. `geography(Point,4326)` rather than float pairs: correct spherical
 distance and GiST indexes for free. PostGIS availability is not a risk: development and production
-both run the `postgis/postgis` image (§10.1), so the extension is guaranteed in both.
+run the same image, `postgres:16` with PostGIS installed (§10.1), so the extension is guaranteed in
+both.
 
 ```sql
 -- ── Events ──────────────────────────────────────────────────────────
@@ -737,7 +737,7 @@ same three streets. Zoomed to fit, it is a tangle.
 
 Consequences:
 - **For dense events the list is the primary interface and the map is the verification layer.** Do
-  not spend week-3 hours polishing route rendering that a campus event cannot show off.
+  not spend week-3 hours polishing route rendering that a dense campus event cannot display legibly.
 - Handle overlap explicitly: marker clustering at low zoom, and slight offsets for coincident routes
   so overlapping lines remain distinguishable.
 - Route visualization becomes genuinely informative for the *general* product — weddings,
@@ -840,7 +840,7 @@ passenger car — **Held–Karp dynamic programming solves this exactly** in ~2�
 microseconds.
 
 Therefore: **route sequencing in this system is never approximate. Only the assignment is heuristic.**
-That decomposition is unusual, clean, and worth being able to explain.
+Every solver below competes only on assignment; none of them can produce a badly ordered car.
 
 ### 8.3 Algorithm ladder
 
@@ -848,7 +848,7 @@ That decomposition is unusual, clean, and worth being able to explain.
 |---|---|---|---|---|
 | 1 | **Greedy insertion** — passengers sorted by distance from destination desc., each inserted at the cheapest feasible position | Baseline; always produces a feasible answer | any | ✅ |
 | 2 | **CP-SAT (OR-Tools)** exact model | Ground truth; proves optimality for n ≲ 40 and yields the optimality gap. **Benchmarks only — never run on a user request** | small | ✅ |
-| 3 | **LNS** — ruin-and-recreate with relocate / swap / 2-opt under simulated-annealing acceptance | The production algorithm; the piece that is genuinely yours | 1000+ | ✅ |
+| 3 | **LNS** — ruin-and-recreate with relocate / swap / 2-opt under simulated-annealing acceptance | The production algorithm; hand-written against this objective | 1000+ | ✅ |
 
 **Production runs greedy, then LNS within a time budget. CP-SAT is a measuring instrument, not a
 product feature.** A proven optimum and an LNS answer within a few percent differ by seconds of
@@ -866,12 +866,11 @@ The strategy interface makes that a configuration change.
 *p* to driver *d* is independent of who else rides with *d*. That is false here: the marginal cost of
 a third passenger depends on the route already formed by the first two. Costs are supermodular, so
 flow does not solve the real problem. Its honest role is as a **relaxation producing a lower bound**
-and a **warm start** — which is a stronger thing to say than "I tried min-cost flow," and is the
-same amount of code.
+and a **warm start** — the correct use of it, for the same amount of code.
 
-The reason #2 exists is to make claims about #1 and #3 measurable. *"The LNS lands within X% of
-proven optimal on instances CP-SAT can close, and scales to 1000 participants in Y seconds where
-CP-SAT times out"* is only sayable if the exact solver is built.
+#2 exists to make the quality of #1 and #3 measurable. *"LNS lands within X% of proven optimal on
+instances CP-SAT can close, and scales to 1000 participants in Y seconds where CP-SAT times out"*
+can only be measured if the exact solver is built.
 
 ### 8.4 Re-optimization and churn
 
@@ -880,8 +879,7 @@ re-optimization that reshuffles everyone is useless — people have already made
 
 So `w6 * churn(S, S_prev)` penalizes changes relative to the previously *activated* solution
 (count of passengers whose assigned driver changed, weighted). This is a minimum-perturbation /
-warm-start problem, it is what makes the product actually usable week to week, and almost nobody
-builds it.
+warm-start problem, and it is what makes the product actually usable week to week.
 
 ### 8.5 Benchmarking
 
@@ -897,14 +895,14 @@ Per cell record: objective, vehicles used, mean and p95 passenger detour, wall-c
 gap to the CP-SAT bound where available. Commit results as JSON; render charts from that JSON.
 
 **Run a small subset in CI as a regression gate** — if a refactor degrades solution quality by more
-than a threshold, the build fails. A performance regression test on an optimization algorithm is an
-unusual and strong thing to have.
+than a threshold, the build fails. Unit and property tests cannot catch this: a refactor can keep
+every solution feasible while making all of them worse.
 
 ---
 
-## 9. Where the engineering signal comes from
+## 9. Engineering concerns, and where each is handled
 
-Each item below is a real feature of the system, not an exercise:
+Each concern maps to a concrete part of the system:
 
 | Concept | Concrete artifact |
 |---|---|
@@ -918,8 +916,10 @@ Each item below is a real feature of the system, not an exercise:
 | Caching | Travel cache keyed by H3 cell pairs, shared across events in a geography, with a measured hit rate |
 | AuthZ | Three principals, per-audience response schemas, address redaction gated on solution state |
 | Testing | Pure solver unit tests; testcontainers integration tests against real Postgres; Hypothesis property tests asserting feasibility invariants; benchmark regression gate |
-| Observability | Structured JSON logs with job correlation ids; solve-time histograms by algorithm and n; Sentry |
-| CI/CD | lint → typecheck → unit → integration → benchmark gate → build image → deploy |
+| Observability | Structured JSON logs with job correlation ids; solve-time histograms by algorithm and n; Sentry; CloudWatch alarms on instance health |
+| Infrastructure as code | Terraform: VPC, security group, EC2, IAM instance role, backup bucket, GitHub OIDC role (§10.1) |
+| Credential hygiene | No long-lived AWS credentials anywhere: instance role for S3, SSM instead of SSH, OIDC for CI, SSO for the developer |
+| CI/CD | lint → typecheck → unit → integration → benchmark gate → build arm64 image → deploy via OIDC |
 
 Property-based testing is the cheapest high-value item on this list: generate random instances,
 assert every returned solution satisfies capacity, time windows, detour caps, and exactly-once
@@ -931,7 +931,7 @@ assignment. Hypothesis will find solver bugs faster than manual testing will.
 
 | Layer | Choice | Reason |
 |---|---|---|
-| DB | Postgres 16 + PostGIS, self-hosted in Docker on the VM | Correct spherical distance, GiST indexes, `SKIP LOCKED`. Same image as development; no free-tier compute limits (§10.1). |
+| DB | Postgres 16 + PostGIS, self-hosted in Docker on the instance | Correct spherical distance, GiST indexes, `SKIP LOCKED`. Same multi-arch image in development and production; no free-tier compute limits (§10.1). |
 | ORM | SQLAlchemy 2.0 async + Alembic | Migrations from commit one. |
 | API | FastAPI + Pydantic v2 | OpenAPI → generated TypeScript client. |
 | Queue | Postgres `SKIP LOCKED` (see §4.2) | Zero added infra; transactional with domain writes. |
@@ -944,20 +944,26 @@ assignment. Hypothesis will find solver bugs faster than manual testing will.
 | Testing | pytest + testcontainers + Hypothesis | Never SQLite — the schema uses PostGIS and partial indexes. |
 | Lint/types | Ruff + mypy (strict on `domain/`) | Strict where it matters. |
 | Observability | structlog JSON + Sentry free tier (+ OpenTelemetry later) | $0. |
-| CI | GitHub Actions | — |
-| Hosting | Vercel (web, free) + **one always-on AWS Lightsail VM** running Caddy, api, worker, and Postgres | $12/month, covered by AWS credits for ~12 months. See §10.1. |
+| CI | GitHub Actions, deploying to AWS via OIDC | No AWS credentials stored in the repo. |
+| Infrastructure | Terraform (state in S3), IAM, SSM Session Manager, CloudWatch | Reproducible, reviewable infrastructure; see §10.1. |
+| Hosting | Vercel (web, free) + **one always-on EC2 `t4g.small`** running Caddy, api, worker, and Postgres | ~$17.50/month, covered by AWS credits for ~11 months. See §10.1. |
 
 ### 10.1 Deployment topology
 
-A single always-on VM, Docker Compose, Caddy in front for automatic TLS:
+A single always-on EC2 instance, Docker Compose, Caddy in front for automatic TLS, all provisioned
+by Terraform:
 
 ```
-Vercel (free) ──────► Caddy :443  ── auto TLS          AWS Lightsail, us-east-1
-                        │                              2 GB / 2 vCPU, $12/month
+Vercel (free) ──────► Caddy :443  ── auto TLS     EC2 t4g.small (Graviton, arm64)
+                        │                         us-east-1, public subnet of its own VPC
                         ├─► api      (uvicorn, FastAPI)
                         └─► worker   (same image, different entrypoint)
                                 │
-                        postgres     (postgis/postgis, no published port)
+                        postgres     (postgres:16 + PostGIS, no published port)
+                                │
+                                └─► nightly pg_dump ──► S3 (via instance role)
+
+Operator ── SSM Session Manager (no SSH port)     GitHub Actions ── OIDC role ──► deploy
 ```
 
 **API and worker are separate processes, co-located on one machine.** This is the important
@@ -966,16 +972,57 @@ isolation, a real queue between them — and moving the worker to its own machin
 config change, not a refactor. Co-locate the processes; do not co-mingle the code.
 
 **Why an always-on box rather than scale-to-zero:** it resolves §11 item 2 (the `SKIP LOCKED`
-worker must be running to poll), and it removes cold-start latency on a portfolio link that a
-recruiter will open cold. At this scale the box is idle almost always, which is fine.
+worker must be running to poll), and it removes cold-start latency for the first visitor after an
+idle stretch — which, for a weekly event, is most visitors. At this scale the box is idle almost
+always, which is fine.
 
-**Why Lightsail** (decided 2026-09-10): fixed monthly billing with IPv4 and 3 TB transfer included
-— no egress, NAT, or load-balancer line items — in `us-east-1`, which serves the whole US (§2.4).
-New AWS accounts receive up to $200 in credits valid 12 months, which covers the $12 plan for the
-year — provided the credits apply to Lightsail, which the first bill confirms. Hetzner was cheaper on paper, but its cost-optimized line was sold out and its next tier
-started at $14.09. Use the $12 plan *with* IPv4, not the $10 IPv6-only variant: IPv4-only client
-networks could not reach it. Manage it from the console and deploy over SSH, so no AWS access keys
-exist to leak.
+**Why EC2 rather than Lightsail** (decided 2026-09-10, superseding Lightsail the same day).
+Lightsail is the simpler product — flat $12 with IPv4, disk, and transfer bundled. The deciding
+difference is credentials. A Lightsail instance cannot assume an IAM role, so anything the box does
+against AWS — the nightly S3 backup, for one — needs a long-lived access key stored on the machine,
+and shell access means an open SSH port with keys to manage. For a public repository whose hard
+rules are about keeping secrets out of reach, that is the wrong default. EC2 removes both, at
+~$5.50/month more, and brings network and access controls under the same infrastructure code:
+
+- **Terraform** for everything below — the infrastructure is reviewable in a pull request and
+  rebuildable from nothing. `terraform plan` also makes every billable resource visible before it
+  exists, which is the best defence against AWS's bill traps.
+- **A small VPC of its own** — one public subnet, internet gateway, route table. No NAT gateway.
+- **A security group allowing only 80 and 443.** No port 22 at all.
+- **SSM Session Manager** for shell access, authenticated by IAM, instead of SSH keys and an open
+  port.
+- **An IAM instance role** that lets the box write backups to S3 — no credentials on the machine.
+- **GitHub Actions deploys through an OIDC-federated role** — no AWS keys stored in the repo, which
+  matters doubly because the repo is public.
+- **CloudWatch alarms** on status checks, CPU credits, and disk.
+
+The result is that **no long-lived AWS credential exists anywhere**: the instance has a role, CI
+has OIDC, and the developer uses short-lived IAM Identity Center (SSO) sessions for Terraform.
+
+**Why `t4g.small`.** 2 vCPU and 2 GB, the same shape as the Lightsail plan. Graviton (arm64) is
+~$3/month cheaper than the x86 `t3.small`, and it matches the development machine (Apple Silicon),
+so images run natively in both places. Burstable CPU is right for a box that is idle almost always
+and solves in bursts of seconds.
+
+**Cost, us-east-1 on-demand:** instance ~$12.26, 20 GB gp3 disk ~$1.60, public IPv4 ~$3.65,
+transfer $0 under the 100 GB/month free allowance, S3 backups cents — **~$17.50/month**, against
+$12 for Lightsail. New AWS accounts receive up to $200 in credits valid 12 months, which covers
+~11 months of it. After that, a 1-year Compute Savings Plan cuts the instance line by roughly 30%.
+IPv4 is not optional: IPv6-only would strand users on IPv4-only networks, and making outbound calls
+to IPv4-only services from an IPv6-only subnet needs a NAT gateway (~$32/month).
+
+Hetzner was cheaper on paper, but its cost-optimized line was sold out and its next tier started at
+$14.09, with the same stored-credential problem for off-box backups.
+
+**The PostGIS image must be multi-arch.** `postgis/postgis` publishes amd64 only (checked on Docker
+Hub, 2026-09-10) — it already runs under emulation on the Apple Silicon dev machine and would do
+so on Graviton. Build a small image instead, `FROM postgres:16` plus Debian's
+`postgresql-16-postgis-3` package; both are published for arm64 and amd64. One image, native
+everywhere.
+
+**Terraform state never enters the repository.** State files can hold secrets in plain text and
+this repository is public. State lives in an S3 backend; `*.tfstate*` and `.terraform/` are
+gitignored before the first `terraform init`.
 
 **Why Postgres on the box rather than managed** (reverses the earlier choice of Neon, 2026-09-10):
 Neon's free plan allows 100 CU-hours per month; a worker polling every second never lets the
@@ -987,22 +1034,27 @@ constraints, and parity with the development image. The cost is ~250 MB of RAM a
 **The database port is never published.** The development `docker-compose.yml` maps `5432:5432`,
 which binds every interface — and Docker's port publishing bypasses the host firewall. The
 production compose file publishes no database port; api and worker reach Postgres over the
-compose network. The Lightsail firewall allows only 22, 80, and 443.
+compose network. The security group allows only 80 and 443 regardless.
 
 **Sizing (estimates, to be measured):** ~250 MB API, ~150–250 MB worker (greedy + LNS; CP-SAT is
-not deployed, §8.3), ~250 MB Postgres, ~300 MB Caddy + OS — roughly 1–1.1 GB of the 2 GB plan, plus
+not deployed, §8.3), ~250 MB Postgres, ~300 MB Caddy + OS — roughly 1–1.1 GB of the instance's 2 GB, plus
 a swap file as a safety margin. OSRM stays on the dev machine (§4.4) and is never deployed.
 
-**AWS bill traps, should this ever move to EC2.** A single instance in a *public* subnet with a
-security group, and Caddy terminating TLS. No Application Load Balancer (~$16/mo), no NAT Gateway
-(~$32/mo) — both cost more than the compute they would front here. On Lightsail the same rule
-applies to its add-ons: no managed database, load balancer, or object storage, which also keeps the
-deployment portable to any other host (including a home server behind Cloudflare Tunnel). A
-zero-spend budget and a monthly cost budget with forecast alerts are set before launching anything.
+**AWS bill traps.** A single instance in a *public* subnet with a security group, and Caddy
+terminating TLS. No Application Load Balancer (~$16/mo), no NAT Gateway (~$32/mo) — both cost more
+than the compute they would front here. Other quiet charges: an Elastic IP left unattached, EBS
+snapshots, oversized volumes, CloudWatch Logs ingestion. Terraform declares every resource, so
+nothing exists that `plan` does not show and `destroy` cannot remove. A zero-spend budget and a
+monthly cost budget with forecast alerts are set before launching anything. The application itself
+uses nothing AWS-specific beyond S3 for backups, so it stays portable to any Docker host — including
+a home server behind Cloudflare Tunnel.
 
-**Backups are load-bearing.** With Postgres self-hosted, the nightly `pg_dump` to object storage
-(Cloudflare R2, off AWS so it survives an account problem) is the *only* copy. It runs from the
-first real event, and at least one restore is rehearsed before the project is presented.
+**Backups are load-bearing.** With Postgres self-hosted, the nightly `pg_dump` is the *only* copy.
+It goes to an S3 bucket written through the instance role — no backup credentials exist — with
+versioning on and a lifecycle rule expiring old dumps. The trade-off, accepted: backups share the
+AWS account with the thing they back up. At this scale, versioning covers accidental deletion; an
+off-AWS copy would reintroduce a stored credential. The job runs from the first real event, and at
+least one restore is rehearsed before the project is presented.
 
 ### Deferred infrastructure, and its trigger
 
@@ -1012,14 +1064,14 @@ first real event, and at least one restore is rehearsed before the project is pr
 | Celery | Job volume outgrows a single worker's `SKIP LOCKED` polling loop |
 | SSE | Polling load becomes visible, or solves routinely exceed ~30s |
 | Accounts | Organizers ask for event history across devices |
-| AWS ECS + Terraform | The project has proven itself and the migration is worth writing up |
+| AWS ECS | The single instance becomes the constraint — deploy downtime matters, or api and worker need to scale independently. The Terraform already exists; this is a module, not a migration. |
 | A dedicated worker machine | One worker's solve queue backs up, or a runaway solve starves the API |
-| Managed Postgres (RDS, Neon paid) | Operating the database becomes a measurable cost, or the data must outlive the VM |
+| Managed Postgres (RDS, Neon paid) | Operating the database becomes a measurable cost, or the data must outlive the instance |
 | CP-SAT in production | Benchmarks show LNS > ~5% off optimal on small events (§8.3) |
 | Flexible drivers (`Role.EITHER`, §2.3) | The coordinator wants the system to choose how many cars go, not just who rides in them |
 
-Migrating from a PaaS to ECS on Terraform is a *better* story than having started there, and it
-defers the cost until the project has earned it.
+Starting on one Terraform-managed instance rather than ECS keeps the first deploy small; ECS stays
+deferred until a single box is measurably the problem.
 
 ---
 
@@ -1033,10 +1085,10 @@ by blast radius: the first four can force a design change, the rest only affect 
 | Item | Resolution |
 |---|---|
 | 1. Matrix limits | **Resolved.** ORS allows 3,500 sources × destinations per request; the 50-participant cap keeps every event to one call. Verified with a live 51-point request (§4.4). |
-| 2. Always-on process | **Resolved.** A VM runs whatever is started on it (§10.1). |
-| 3. PostGIS on managed Postgres | **Moot.** Postgres is self-hosted from the `postgis/postgis` image; Neon's free compute allowance could not sustain a polling worker (§10.1). |
+| 2. Always-on process | **Resolved.** An EC2 instance runs whatever is started on it (§10.1). |
+| 3. PostGIS on managed Postgres | **Moot.** Postgres is self-hosted with PostGIS installed in the image; Neon's free compute allowance could not sustain a polling worker (§10.1). |
 | 4. Geocoding provider | Open, still reversible. ORS geocoding (3,000/day) is the default candidate. |
-| 6. Backend host | **Resolved.** AWS Lightsail, 2 GB, `us-east-1` (§10.1). |
+| 6. Backend host | **Resolved.** AWS EC2 `t4g.small`, `us-east-1`, provisioned with Terraform (§10.1). Lightsail was chosen first and superseded the same day. |
 | 7. Managed Postgres | **Moot** (see 3). |
 | 5, 8–12 | Open; none blocks Week 2. |
 
@@ -1086,18 +1138,18 @@ whether a second always-on process is affordable (see #3), and monthly floor.
 *Candidates:* Fly.io · Render · Railway · Google Cloud Run · Koyeb.
 
 **7. Managed Postgres comparison.** Storage, compute hours, and specifically **inactivity
-behavior** — a tier that *pauses* a project after a week of no traffic is bad for a portfolio
-project that a recruiter opens at random.
+behavior** — a tier that *pauses* a project after a week of no traffic is bad for a public site
+whose traffic is sporadic.
 
 ### Tier 3 — confirm and move on
 
-**8. Vercel Hobby** — the non-commercial-use restriction is real; fine for a portfolio project, not
+**8. Vercel Hobby** — the non-commercial-use restriction is real; fine for a free site, not
 if it is ever monetized. Cloudflare Pages is the alternative without that clause.
 **9. Sentry** — error events per month on the developer tier.
 **10. Resend** (or alternative) — emails/day and /month, and whether a verified sending domain is
 required (it usually is; budget an hour of DNS).
 **11. GitHub Actions** — minutes are unlimited on **public** repositories. Making the repo public is
-free CI and good for the portfolio; decide early, because scrubbing history later is unpleasant.
+free CI; decide early, because scrubbing history later is unpleasant.
 **12. Geofabrik OSM extract** — download size for the target region and the RAM `osrm-routed` needs
 after preprocessing (CH and MLD have different memory profiles). Local-only, so this is a laptop
 constraint, not a hosting cost.
