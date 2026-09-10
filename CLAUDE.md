@@ -56,6 +56,9 @@ make db        # postgres + postgis via docker compose
 
 `make check` must pass before a commit. CI runs the same steps.
 
+Commits use [Conventional Commits](https://www.conventionalcommits.org/): `feat(domain): …`,
+`fix(api): …`, `docs: …`. The two plain-subject commits early in the history predate this.
+
 ## Layout
 
 ```

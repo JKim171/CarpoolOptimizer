@@ -2,7 +2,8 @@
 
 **Start:** 2026-09-08 · **Presentable by:** ~2026-10-20
 **Assumed capacity:** ~12 focused hours/week (~72 hours total)
-**First real users:** campus club tennis · **Budget target:** ~$0–10/month
+**First real users:** campus club tennis (the author coordinates it) · **Then:** a public US site
+**Budget:** ~$1/month while AWS credits last (~12 months), ~$13/month after
 
 See `design.md` for architecture, schema, API, and optimization design.
 
@@ -39,6 +40,11 @@ No web layer at all this week. The solver ships before the API.
 **Done when:** you can solve a 200-participant synthetic instance from a Python REPL, and the
 validator confirms feasibility. CI is green.
 
+**Status (2026-09-10): met.** The domain core, validator, generator, property tests, and CI are
+built — 1,000 participants solve greedily in 0.2 s. Carried forward: the `apps/api` skeleton,
+Alembic baseline, and `/healthz` move to Week 2, where they belong with the API; OSRM in compose
+moves to Week 5, the only week that needs it.
+
 ---
 
 ## Week 2 — Backend API (organizer-entered roster)
@@ -46,10 +52,16 @@ validator confirms feasibility. CI is green.
 Model A only (`design.md` §2.1): the coordinator enters the whole roster. This removes the join
 flow, participant tokens, and redaction from the critical path — real usage arrives a week sooner.
 
+- `apps/api` skeleton, Alembic baseline, `/healthz` (carried from Week 1). `.env.example` with a
+  placeholder `ORS_API_KEY`.
+- Domain first: `ProblemInstance` gains the event end time, so return-leg drop-off ETAs can be
+  scheduled forward from it (the forward scheduler already exists).
 - Full schema from `design.md` §5, including `participants_version`, `input_fingerprint`, `priority`,
   `geocode_source`, and the TTL'd `geocode_cache` (§5.2),
   `pinned_driver_id`, and both partial unique indexes (painful to retrofit once there is live data).
-- Event / participant / job / solution endpoints per §6, organizer principal only.
+  Also `events.ends_at` and `route_stops.leg`, which the return leg needs.
+- Event / participant / job / solution endpoints per §6, organizer principal only. The
+  50-participant cap enforced in the API, race-free (`design.md` §5.1).
 - Optimization runs **inline (synchronous)** — but behind the async contract:
   `POST → 202 {job_id}` and `GET /v1/optimizations/{job_id}`. Week 4 swaps the executor only; the
   API contract and the frontend do not move.
@@ -71,25 +83,37 @@ The most important week in the plan.
   first real event (`design.md` §2.3).
 - Roster entry is the whole UX problem here. It must be faster than the spreadsheet the coordinator
   uses today, or they will keep using the spreadsheet. Paste-from-clipboard is worth an hour.
+- Results show both legs: pickup order out, drop-off order back, and an "Open in Google Maps" link
+  per leg (`design.md` §7.3).
 - Manual pin + re-optimize, so the coordinator can override the solver and keep going.
 - Job status polling via TanStack Query.
-- Deploy: Vercel (web) + backend host + managed Postgres. Real domain, HTTPS.
+- Deploy: Vercel (web) + Lightsail running Caddy, api, and Postgres under Docker Compose
+  (`design.md` §10.1). Production compose publishes no database port. Real domain, HTTPS.
+- Nightly `pg_dump` to Cloudflare R2 **before** the first real event — with Postgres self-hosted it
+  is the only copy of the data.
 - **Run one real club tennis practice through it.**
 
 **Done when:** real people got real assignments and drove to real practice. Then write down what
 broke — that list drives weeks 4–6 more reliably than this plan does.
 
-> Sit with the coordinator while they use it the first time. Do not help. Watch where they hesitate.
+> The author is the coordinator, so this cannot be a usability test of the coordinator. Watch the
+> drivers and riders instead — the people who did not design it — and, before the public launch,
+> hand it to one organizer from outside the club. Do not help. Watch where they hesitate.
 
 ---
 
 ## Week 4 — Async infrastructure and the recurring-event loop
 
-- `SKIP LOCKED` job queue with lease-based visibility timeout (§4.2). Resolve the always-on-worker
-  question first (§11 item 2) — in-process background task is the likely v1 answer.
+- `SKIP LOCKED` job queue with lease-based visibility timeout (§4.2). **Decide first** whether the
+  worker is a separate process or an in-process background task, against the triggers in
+  `design.md` §4.2 — multi-second LNS budgets, solves lost to deploys, or ORS failures reaching
+  users. The VM can run either; the claim/lease code is the same.
 - Bounded retries, expired-lease reclaim, cooperative cancellation, progress checkpointing.
 - `input_fingerprint` dedup; `participants_version` staleness detection with auto-requeue.
-- Real routing provider behind the interface + `travel_cache` with hit-rate metrics.
+- ORS behind the routing interface (`design.md` §4.4): one matrix request per solve, Directions
+  fetched lazily per route, geocoding proxied through the API. The saved 51-point playground
+  response makes a parsing fixture — random points, no key, so safe to commit. `travel_cache` with
+  hit-rate metrics.
 - **Churn-penalized re-optimization** (`w6`) — makes it usable week over week.
 - **Clone-last-week / roster reuse** (§5.3) — the thing club tennis will actually ask for. Copies
   participant rows forward; the canonical `people` address book waits for accounts.
@@ -106,6 +130,10 @@ exactly once in effect; and re-optimizing a changed event preserves most prior a
 The differentiator. Protect this week.
 
 - **CP-SAT exact model** (OR-Tools) — proves optimality for n ≲ 40 and yields the optimality gap.
+  Benchmark-only: OR-Tools is a benchmark dependency and never ships in the production image
+  (`design.md` §8.3).
+- OSRM in compose with a single-state extract (carried from Week 1) — the whole-US extract is too
+  large for a laptop, and the benchmarks do not need it.
 - **LNS**: ruin-and-recreate, relocate / swap / 2-opt, simulated-annealing acceptance.
 - Benchmark harness: n ∈ {20, 50, 100, 250, 500, 1000} × driver ratio ∈ {0.2, 0.35, 0.5} × three
   spatial distributions, fixed seeds, against local OSRM. Results committed as JSON.
@@ -121,7 +149,9 @@ proven optimal on the instances CP-SAT can close.
 ## Week 6 — Hardening and packaging
 
 - structlog JSON logging with job correlation ids; Sentry; solve-time histograms by algorithm and n.
-- Rate limiting on join and optimize endpoints.
+- Rate limiting on join and optimize endpoints, plus a per-event daily solve limit — a
+  prerequisite for public launch, not polish (`design.md` §2.4).
+- Rehearse one restore from the R2 backups.
 - Organizer email on event creation (Resend free tier) so the organizer token isn't lost.
 - Error states, empty states, "no feasible solution" explanations in the UI.
 - **README**: architecture diagram, benchmark table, 20-second demo GIF, design-decision rationale,
@@ -146,6 +176,16 @@ alone understates the real burden by roughly 2x.
 Each has a documented trigger condition in `design.md` §10. None of them is on the critical path to a
 deployed, benchmarked, actually-used product.
 
+## Before opening to the public — gates, not weeks
+
+Club tennis needs none of these, because its coordinator enters the roster. A public site where
+strangers create events needs all of them (`design.md` §2.4):
+
+- Self-service join links (Model B) — organizers rarely know every participant's address.
+- Rate limits and per-event solve limits — the ORS quotas are one pool shared by every user.
+- Retention policy, a privacy page, and event deletion.
+- ORS (and geocoder) terms confirmed for a free public website.
+
 ---
 
 ## If you fall behind
@@ -169,33 +209,37 @@ Those three are the entire portfolio value.
 | Item | Tier | Monthly |
 |---|---|---|
 | Vercel | Hobby (non-commercial) — frontend | $0 |
-| **Always-on VPS** | 2 vCPU / 2–4 GB, Docker Compose: Caddy + api + worker | **$4–11** |
-| Neon Postgres | Free (scale-to-zero, PostGIS) | $0 |
-| Routing matrix API | ORS / Mapbox free tier | $0 |
+| **AWS Lightsail** | 2 vCPU / 2 GB / 60 GB, IPv4, `us-east-1`. Docker Compose: Caddy + api + worker + Postgres | **$12** — covered by AWS credits (up to $200, 12 months), if they apply to Lightsail |
+| Postgres + PostGIS | Self-hosted on the VM | $0 |
+| Routing, directions, geocoding | ORS free Standard plan | $0 |
 | Sentry | Developer free | $0 |
 | Object storage for backups | Cloudflare R2 free tier | $0 |
 | OSRM | Local Docker only — never deployed | $0 |
-| Domain | — | ~$1 (≈$12/yr) |
-| **Total** | | **~$5–12/month** |
+| Domain | GitHub Student Pack: free first year — check the renewal price before choosing | $0 → ~$1 |
+| **Total** | | **~$1/month on credits; ~$13/month after** |
 
-VPS options, cheapest first — all run the same `docker compose up`:
+Hosts considered, verified 2026-09-10 — all run the same `docker compose up`:
 
-| Option | Specs | ~Monthly | Note |
+| Option | Specs | Monthly | Outcome |
 |---|---|---|---|
-| Oracle Cloud Always Free | 4 ARM cores / 24 GB | $0 | Absurdly generous, but capacity is often unavailable and idle accounts can be reclaimed. Good home for OSRM if wanted. |
-| Hetzner CX22 | 2 vCPU / 4 GB / 40 GB | ~$4 | Best price/performance. Not AWS-branded. |
-| AWS Lightsail | 2 vCPU / 2 GB / 60 GB | ~$10 | AWS-branded with **fixed** billing — no surprise egress or NAT charges. |
-| AWS EC2 t4g.small | 2 vCPU / 2 GB | ~$12 + EBS | Only if the EC2/VPC experience itself is the goal. |
-| Fly.io | shared-cpu-1x 512 MB ×2 | ~$4–7 | Best DX; verify current pricing. |
-
-*Verify all of these before committing — this category re-prices frequently.*
+| **AWS Lightsail** | 2 vCPU / 2 GB / 60 GB, IPv4 | $12 | **Chosen.** Fixed billing, no egress/NAT line items, AWS credits. Use the IPv4 plan, not the $10 IPv6-only one. |
+| Hetzner Cloud | Cost-optimized line | from $7.09 | Sold out. |
+| Hetzner Cloud | Regular performance | from $14.09 | More than Lightsail, without the credits. |
+| Neon (database) | Free plan: 100 CU-hours/month | $0 | Rejected: a polling worker needs ~183 (`design.md` §10.1). |
+| AWS EC2 | 2 GB | ~$17 with disk + IPv4 | Bill-surprise surface for no benefit here. |
+| Oracle Cloud Always Free | 4 ARM cores / 24 GB | $0 | Reclaims idle instances — and this one is idle nearly always. |
+| Home server | — | ~$0 | Possible later behind Cloudflare Tunnel (no open ports, hidden IP); costs uptime. |
 
 Running api and worker as two processes on one machine (rather than two machines) is a deliberate
 budget choice for v1 — see `design.md` §10.1. They remain genuinely separate processes with a real
 queue between them, so splitting them out later is a deploy config change, not a refactor.
 
-On AWS specifically: single instance in a **public** subnet, Caddy for TLS. No ALB (~$16/mo), no
-NAT Gateway (~$32/mo) — each costs more than the compute it would front. Set a budget alert first.
+Billing guardrails, set before anything is created: a zero-spend budget (alerts on any cost the
+credits do not cover) and a $15 monthly cost budget that **excludes credits**, with actual and
+forecast alerts, so a forgotten resource quietly burning credits is still visible. MFA on the root
+user. No AWS access keys at all — Lightsail is managed from the console and deployed over SSH.
+AWS has no hard spending cap on a paid account; on Lightsail the exposure is bounded anyway,
+because the plan is flat-rate and the only overage is transfer beyond 3 TB.
 
 ---
 
@@ -203,12 +247,15 @@ NAT Gateway (~$32/mo) — each costs more than the compute it would front. Set a
 
 | Risk | Mitigation |
 |---|---|
-| Club tennis doesn't adopt it | Talk to the organizer in **week 1**, not week 3. Build what they ask for. |
+| Club tennis doesn't adopt it | Reduced: the author is the coordinator. The remaining risk is the opposite — building for one coordinator's habits. Watch drivers and riders in week 3, and one outside organizer before the public launch. |
 | Geocoding terms forbid storing coordinates permanently | **Resolved by design** — addresses are the durable record, coordinates are TTL-cached (`design.md` §5.2). Provider choice is now reversible. |
-| Host cannot run an always-on worker on a cheap tier | `design.md` §11 item 2. Fallback: worker as an in-process background task. |
+| Host cannot run an always-on worker on a cheap tier | **Resolved** — a VM runs whatever is started on it (`design.md` §10.1). |
+| PostGIS unavailable on the free tier | **Moot** — Postgres is self-hosted from the `postgis/postgis` image. |
+| Self-hosted Postgres loses data | Nightly `pg_dump` to R2 from before the first real event; one rehearsed restore in week 6. |
+| One client exhausts the shared ORS quota on the public site | Per-event and per-client limits; haversine fallback when quota runs out (`design.md` §2.4). |
+| AWS credits turn out not to cover Lightsail | Check Billing → Credits after the first day. Fallback: $12/month out of pocket, or a home server. |
 | OSRM regional extract setup eats a day | Timebox to 3 hours; haversine × road-factor is an acceptable benchmark stand-in. |
 | Weeks 5–6 get squeezed | Weeks 1–4 have explicit cut items; weeks 5–6 do not. Protect them. |
-| PostGIS unavailable on the free tier | Documented fallback in `design.md` §5. |
 
 ---
 
@@ -217,7 +264,7 @@ NAT Gateway (~$32/mo) — each costs more than the compute it would front. Set a
 Do not write this now. Write it in week 6 from measured data.
 
 > Built and deployed a full-stack carpool optimization platform (FastAPI, Postgres/PostGIS,
-> Next.js, Fly.io) used for **N** real events coordinating **M** participants. Implemented a
+> Next.js, AWS) used for **N** real events coordinating **M** participants. Implemented a
 > large-neighborhood-search solver reaching within **X%** of CP-SAT-proven optimal while scaling to
 > 1,000 participants in **Y** seconds, over a Postgres `SKIP LOCKED` job queue with lease-based
 > failure recovery and fingerprint-based idempotency.

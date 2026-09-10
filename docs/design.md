@@ -1,6 +1,6 @@
 # CarpoolOptimizer — Design Document
 
-**Status:** Draft v2 · Last updated 2026-09-08
+**Status:** Draft v3 · Last updated 2026-09-10
 **Context:** Portfolio project intended for real public deployment. See `roadmap.md` for the
 time-boxed delivery plan.
 
@@ -21,7 +21,9 @@ the single-destination structure admits a decomposition that makes it tractable 
 ## 2. First real users: club tennis
 
 The first deployment target is a campus club tennis team (~20–60 members, weekly recurring
-practices at a fixed venue). This shapes the product more than any abstract scaling concern:
+practices at a fixed venue). The project's author is that team's coordinator, so product questions
+about this use case are answered first-hand rather than inferred. This shapes the product more
+than any abstract scaling concern:
 
 | Property of the real use case | Design consequence |
 |---|---|
@@ -89,6 +91,31 @@ exist. Until then `w2` can be near zero without changing any result.
 if the system told you the fewest cars you need?" The change is then one checkbox on the roster --
 "must drive" versus "can drive if needed" -- against code that already works.
 
+### 2.4 Beyond club tennis: a public product
+
+Club tennis is the first user, not the only one. The goal is a public website any organizer in the
+**United States** can use. Decided 2026-09-10:
+
+| Decision | Reason |
+|---|---|
+| **At most 50 active participants per event** | 50 people + the destination is a 51 × 51 matrix — 2,601 entries, inside the routing provider's 3,500-per-request limit (§4.4), so every event is one matrix call and no tiling logic exists. The largest square that fits is 59 × 59; raising the cap past 58 brings tiling back. Enforced in the API (§5.1), **never** in `domain/` — the benchmark harness runs the same solver at n = 1000. |
+| **US only (v1)** | One hosting region (US East) serves the whole country at acceptable latency; every event already carries its own IANA `timezone`. |
+| **Return trip in v1; a car keeps the same riders both ways** | Matches how practices work, and is what `domain/` already implements (§8.2). Assigning the return leg separately — a rider leaving early with a different car — would turn it into a second assignment problem with per-person departure times. Not planned. |
+| **Exact pickup addresses by default** | `pickup_precision` defaults to `exact`; visibility is limited by §6.2, not by blurring the data. |
+
+Opening the site to strangers changes what "launch-ready" means. These are **prerequisites for
+public launch**, not polish — none is needed for club tennis, whose roster the coordinator enters:
+
+- **Self-service join links (Model B, §2.1).** Model A assumes the organizer knows everyone's
+  address. True for a coordinator; not for a stranger organizing a wedding.
+- **Rate limits and per-event solve limits.** Without accounts, anyone can create events. The
+  routing and geocoding quotas (§4.4) are one pool shared by every user, so one abusive client
+  exhausting them is a routing outage for everyone. The 50 cap bounds per-event cost; rate limits
+  bound per-client cost; haversine is the fallback when quota runs out.
+- **Retention policy, a privacy page, and event deletion.** §5.3.2 defers retention until the
+  address book exists; a public site holding strangers' home addresses cannot wait that long.
+- **Provider terms** confirmed to permit a free public website, not only personal/development use.
+
 ### Honest framing
 
 At n ≈ 40 in a dense cluster, an exact solver runs in well under a second. The async job
@@ -110,8 +137,10 @@ Explicitly out of scope, with reasons:
 - **SMS notifications** — A2P 10DLC registration is weeks of compliance work.
 - **Payments / cost splitting** — touches TNC regulation.
 - **Multiple destinations per event** — destroys the structural property that makes §8 work.
-- **Round-trip / return-leg optimization (v1)** — modelled later as a second independent solve
-  reusing the same machinery.
+- **Separate return-leg assignment** — riders go home in the car they came in (§2.4). The return
+  leg *is* in v1; only reassigning it independently is out.
+- **Events over 50 participants** — the cap keeps every event to a single matrix request (§2.4).
+- **Regions outside the US (v1)** — one hosting region, one routing and geocoding configuration.
 
 ---
 
@@ -123,17 +152,18 @@ Explicitly out of scope, with reasons:
 └──────────────────────┬─────────────────────────────────┘
                        │ REST/JSON  (+ polling; SSE later)
 ┌──────────────────────▼─────────────────────────────────┐
-│  FastAPI — modular monolith (Fly.io, 1 machine)         │
+│  FastAPI — modular monolith (AWS Lightsail, 1 VM)       │
 │  api/      events · participants · jobs · solutions     │
 │  domain/   PURE. No I/O. Solver + objective + validator │
 │  adapters/ routing provider · mail · clock              │
 └──────┬──────────────────────────────────┬──────────────┘
        │                                  │
 ┌──────▼────────────────────┐   ┌─────────▼──────────────┐
-│ Postgres + PostGIS (Neon) │   │ Routing provider (iface)│
-│  · domain tables          │   │  · OSRM local (bench)   │
-│  · job queue (SKIP LOCKED)│   │  · ORS/Mapbox (prod)    │
-│  · travel_cache           │   │  · haversine (fallback) │
+│ Postgres + PostGIS        │   │ Routing provider (iface)│
+│ (container on the same VM)│   │  · OSRM local (bench)   │
+│  · domain tables          │   │  · ORS (prod)           │
+│  · job queue (SKIP LOCKED)│   │  · haversine (fallback) │
+│  · travel_cache           │   │                         │
 └──────▲────────────────────┘   └────────────────────────┘
        │
 ┌──────┴──────────────────────────┐
@@ -186,6 +216,32 @@ Rationale:
 Redis is added only when there is a measured reason: cross-instance SSE pub/sub, or a travel cache
 hot enough that the Postgres L2 is the bottleneck.
 
+**Why a separate worker at all, when greedy solves 40 people in ~10 ms.** Not for solver runtime
+(§2 "Honest framing"). Running the solve inside the request fails in specific ways:
+
+- **It stalls the API.** A CPU-bound solve in an `async` FastAPI endpoint blocks the event loop, so
+  every other user's request waits. Threads only soften this under the GIL.
+- **Restarts lose work silently.** A deploy or crash mid-solve drops it; a leased job is reclaimed.
+- **External calls fail.** An ORS timeout or quota hit becomes a user-facing error instead of a
+  backed-off retry.
+- **Phones drop connections.** With a job id, the client reconnects and asks; without one, it
+  re-submits and double-spends quota.
+- **Unbounded concurrency.** Inline, every simultaneous request is a simultaneous solve. On a 2 GB
+  host that also runs Postgres, a burst can reach the OOM killer, which may take Postgres with it.
+  N workers cap concurrent solves at N; a burst queues and gets slower instead of falling over.
+- **LNS is time-budgeted by design** (§8.3) — "search for 10 seconds" does not belong inside an
+  HTTP request.
+
+Throughput scales by adding worker processes against the same table — `SKIP LOCKED` is what lets
+them share it without a coordinator. On a 2 vCPU host that is two workers at most; parallel solves
+need processes, not threads.
+
+**This is a decision point, not a foregone conclusion.** Week 2 executes inline behind the async
+contract (§6), so the frontend never changes. In Week 4, build the separate worker if any of these
+hold: LNS runs with a multi-second budget, solves have been lost to deploys, or ORS failures have
+reached users. If none do, an in-process background task using the same claim/lease code is a
+defensible v1, and splitting it out later remains a deploy change.
+
 ### 4.3 Realtime
 
 Polling via TanStack Query in v1. Jobs complete in seconds; polling at 1s for the ~10s a job runs is
@@ -202,25 +258,55 @@ One interface, three implementations:
 | Impl | Used for | Cost |
 |---|---|---|
 | **OSRM** in Docker with a regional OSM extract | Local dev + the n=1000 benchmark suite | $0 (runs on the dev machine) |
-| **OpenRouteService** or **Mapbox** matrix API | Production (n ≤ ~60 per event) | $0 on free tier |
+| **OpenRouteService** (HeiGIT) matrix API | Production (n ≤ 50 per event, §2.4) | $0 on the free Standard plan |
 | **Haversine × road-factor** | Fallback, and unit tests | $0 |
 
 No free hosted API will return a 10⁶-entry matrix, which is exactly why the benchmark suite needs
-local OSRM. Production events are small enough for a free tier. *Verify current free-tier request
-and coordinate-count limits before depending on them; matrix endpoints typically cap coordinates
-per request and require tiling.*
+local OSRM. Production events are small enough for a free tier.
 
-**Geocoding is done on the frontend** via address autocomplete, which returns coordinates directly.
-This removes server-side geocoding entirely — one fewer external dependency, failure mode, and cache.
+**OpenRouteService, verified 2026-09-10.** `POST /v2/matrix/driving-car` with every point listed
+once (participants + destination) and no `sources`/`destinations` returns the full directed square
+matrix — one call covers both legs, since the return reads the destination's row. Base URL is
+`api.heigit.org`; `api.openrouteservice.org` is deprecated. Keep it in config, not code.
+
+| Limit (free Standard plan) | Value | Consequence |
+|---|---|---|
+| Matrix size per request | 3,500 sources × destinations | 51 × 51 = 2,601 fits: **no tiling** (§2.4) |
+| Matrix size with "dynamic arguments" | 25 | Does not apply — requests send only `locations` and `metrics`. `distance` is not dynamic. |
+| Matrix quota | 500/day · 40/min | One request per solve; fingerprint dedup and `travel_cache` make re-solves free |
+| Directions quota | 2,000/day · 40/min | Binds before matrix — see below |
+| Geocoding quota | 3,000/day · 100/min | Binds first for a public site — see below |
+
+A 51-point test request (random points around a US college town) returned both metrics at
+51 × 51 with no `null` cells and every point snapped within 82 m of a road. Adapter notes from it:
+coordinates are `[lng, lat]` — a swap raises no error, only wrong answers, so pin it with a test;
+durations arrive as floats and are rounded to integer seconds; a `null` cell means an unroutable
+point and becomes an `unassigned` reason, not a crash; each point's `snapped_distance` is kept,
+because a snap of hundreds of metres is a free signal that an address geocoded wrong (§7.2).
+
+**Route geometry is fetched lazily.** Drawing a route takes one Directions call per car per leg —
+~30 for a 50-person event, most of the per-minute quota and ~66 solves/day. So geometry is fetched
+when someone first opens a route and then persisted (§7.5); a rider opening their own car costs
+two calls. Straight segments between stops are an acceptable v1 rendering.
+
+**Geocoding runs through the API, not from the browser.** Address autocomplete is a frontend
+interaction, but the provider key must never ship to the browser — anyone could lift it and spend
+the shared quota. Autocomplete fires per keystroke, so debounce it and require a few characters
+before querying; a pasted roster geocodes each address once without autocomplete; `geocode_cache`
+(§5.2) absorbs repeats. The geocoder remains a reversible choice (§11 item 4).
+
+**Endpoints deliberately not used:** `/optimization` (a hosted routing-problem solver — it would
+replace this project's solver) and everything else on the key besides matrix, directions, and
+geocoding. The map must carry the attribution ORS returns: "openrouteservice.org | OpenStreetMap
+contributors".
 
 ---
 
 ## 5. Data model
 
 PostgreSQL 16 + PostGIS. `geography(Point,4326)` rather than float pairs: correct spherical
-distance and GiST indexes for free. *If the chosen managed free tier cannot enable PostGIS, fall
-back to lat/lng columns plus a haversine helper — at campus scale the difference is immaterial, but
-prefer PostGIS where available.*
+distance and GiST indexes for free. PostGIS availability is not a risk: development and production
+both run the `postgis/postgis` image (§10.1), so the extension is guaranteed in both.
 
 ```sql
 -- ── Events ──────────────────────────────────────────────────────────
@@ -233,12 +319,14 @@ events (
   destination_address  text not null,
   destination_geog     geography(Point,4326) not null,
   arrival_at           timestamptz not null,
+  ends_at              timestamptz not null,          -- return leg departs; drop-off ETAs count forward from it
   timezone             text not null,                 -- IANA
   status               event_status not null,         -- draft|open|locked|archived
   settings             jsonb not null default '{}',   -- objective weights, detour caps
   template_event_id    uuid null references events(id),-- roster reuse / clone lineage
   participants_version bigint not null default 0,     -- optimistic concurrency guard
-  created_at           timestamptz not null default now()
+  created_at           timestamptz not null default now(),
+  check (ends_at > arrival_at)
 );
 
 -- ── Access tokens ───────────────────────────────────────────────────
@@ -322,24 +410,28 @@ solutions (
 create unique index one_active_solution_per_event
   on solutions (event_id) where is_active;
 
+-- One row per car. A car keeps the same riders both ways (§2.4), so a route covers both legs;
+-- only the stop order and geometry are per leg.
 routes (
   id                    uuid primary key,
   solution_id           uuid not null references solutions(id) on delete cascade,
   driver_participant_id uuid not null references participants(id),
   seats_used            int not null,
-  total_distance_m      int not null,
-  total_duration_s      int not null,
-  detour_seconds        int not null,     -- vs the driver's direct route
-  geometry              geometry(LineString,4326)
+  total_distance_m      int not null,     -- both legs
+  total_duration_s      int not null,     -- both legs
+  detour_seconds        int not null,     -- both legs, vs the driver's direct round trip
+  outbound_geometry     geometry(LineString,4326),  -- null until first viewed (§4.4)
+  return_geometry       geometry(LineString,4326)   -- null until first viewed (§4.4)
 );
 
 route_stops (
   id             uuid primary key,
   route_id       uuid not null references routes(id) on delete cascade,
+  leg            route_leg not null,  -- outbound|return; orders differ (§8.2)
   seq            int not null,
   participant_id uuid not null references participants(id),
-  eta            timestamptz not null,
-  unique (route_id, seq)
+  eta            timestamptz not null, -- pickup time outbound, drop-off time on return
+  unique (route_id, leg, seq)
 );
 
 unassigned_participants (
@@ -385,6 +477,12 @@ read as `input_version`. On completion, if `events.participants_version != job.i
 solution is marked stale and — per event settings — automatically re-queued. The event is never
 locked, participants are never blocked from editing, and the conflict is detected rather than
 prevented. This is the answer to *"what happens if someone changes their pickup mid-solve."*
+
+**The participant cap is race-free for the same reason.** Every insert already bumps
+`participants_version`, which is an `UPDATE` on the event row and therefore takes that row's lock.
+Counting active participants *after* the bump, in the same transaction, serializes concurrent
+joins: two requests racing for the 50th seat cannot both see 49. The 51st gets `422`. No separate
+lock, and no count check that a race can slip past.
 
 **Idempotency comes from a content fingerprint.** `input_fingerprint` is a hash of the normalized
 problem instance (sorted participant **address strings**, capacities, windows, destination,
@@ -621,6 +719,9 @@ https://www.google.com/maps/dir/?api=1
   &waypoints=<stop1>|<stop2>|...&travelmode=driving
 ```
 
+The return leg gets its own link with origin and destination swapped and the drop-offs in their
+own order (§8.2) — not the outbound link reversed.
+
 Roughly ten lines of code, and it is what a driver actually uses on Saturday morning. Turn-by-turn
 navigation is a solved problem owned by companies with satellites; this project's job is to decide
 *who picks up whom in what order* and then hand that off cleanly.
@@ -646,9 +747,10 @@ Consequences:
 
 - **MapLibre GL JS.** Tiles from OpenFreeMap or self-hosted Protomaps (§11 item 5) — MapLibre is a
   renderer, not a tile source.
-- **Route geometry is stored, not recomputed.** The provider returns an encoded polyline at solve
-  time; it is persisted in `routes.geometry` so the results screen is a pure database read with no
-  external calls.
+- **Route geometry is fetched once, then stored.** Fetched from the Directions API the first time a
+  route is opened — not at solve time, because the Directions quota cannot absorb ~30 calls per
+  solve (§4.4) — and persisted in `routes.outbound_geometry` / `return_geometry`, so every later
+  view is a pure database read with no external calls.
 - **Render as GeoJSON layers, not DOM markers.** Fine either way at n = 40; required for benchmark
   visualizations at n = 1000.
 - **Do not encode meaning in color alone.** Beyond ~8 drivers, categorical palettes stop being
@@ -661,11 +763,12 @@ Consequences:
 
 | Week 3 | Later |
 |---|---|
-| Destination pin with drag-to-adjust | Return-leg toggle |
-| All-pickups verification map + linked highlighting | Marker clustering / overlap offsets |
-| Draggable pickup correction | Outlier detection before solve |
-| Colored routes with numbered stops | Static participant map (Model B) |
-| "Open in Google Maps" per driver | Animated route playback (probably never) |
+| Destination pin with drag-to-adjust | Marker clustering / overlap offsets |
+| All-pickups verification map + linked highlighting | Outlier detection before solve |
+| Draggable pickup correction | Static participant map (Model B) |
+| Colored routes with numbered stops | Animated route playback (probably never) |
+| "Open in Google Maps" per driver, per leg | |
+| Outbound / return toggle (the return leg is v1, §2.4) | |
 
 ---
 
@@ -716,6 +819,14 @@ restrictions, and divided highways all make `a -> b` differ from `b -> a`, and O
 asymmetric tables accordingly. Sequencing the return independently costs nothing -- the same
 Held-Karp routine with a different terminus -- and is the only way to exploit that.
 
+**Measured, and the honest shape of it.** In the 51-point ORS test matrix (§4.4), 66% of point pairs
+differ by at least a second between directions -- but the median difference is 4 s (0.9%). The
+tail is what matters: 10% of pairs differ by 38 s (7.7%) or more, and the worst by five minutes
+(489 s one way, 787 s back), with one location in all five of the most lopsided pairs -- a one-way
+or divided road nearby. So independent return sequencing changes little on most routes and pays
+off on the few that pass a spot like that. Describe it that way; do not claim an average saving.
+These are random points on a real road network, not a real event.
+
 **A fairness note, stated honestly.** Reversal does mean the passenger collected first is also
 dropped last, riding longest in both directions. A *sum* of ride times is utilitarian by
 construction and cannot see this: it prices total burden, never its distribution. Expressing
@@ -736,8 +847,18 @@ That decomposition is unusual, clean, and worth being able to explain.
 | # | Algorithm | Role | Scale | v1? |
 |---|---|---|---|---|
 | 1 | **Greedy insertion** — passengers sorted by distance from destination desc., each inserted at the cheapest feasible position | Baseline; always produces a feasible answer | any | ✅ |
-| 2 | **CP-SAT (OR-Tools)** exact model | Ground truth; proves optimality for n ≲ 40 and yields the optimality gap | small | ✅ |
+| 2 | **CP-SAT (OR-Tools)** exact model | Ground truth; proves optimality for n ≲ 40 and yields the optimality gap. **Benchmarks only — never run on a user request** | small | ✅ |
 | 3 | **LNS** — ruin-and-recreate with relocate / swap / 2-opt under simulated-annealing acceptance | The production algorithm; the piece that is genuinely yours | 1000+ | ✅ |
+
+**Production runs greedy, then LNS within a time budget. CP-SAT is a measuring instrument, not a
+product feature.** A proven optimum and an LNS answer within a few percent differ by seconds of
+driving in a dense campus cluster, which no user can perceive (§2: the value is coordination, not
+mileage). Meanwhile CP-SAT costs ~400 MB per solve on a 2 GB host, has high runtime variance, and
+the 50-participant cap (§2.4) sits past the ~40 where it reliably proves optimality. Keeping it out
+of production also keeps OR-Tools out of the production image — it is a benchmark-only
+dependency. *Trigger to revisit:* the benchmarks show LNS more than ~5% off optimal on 20–25
+participant instances; then run CP-SAT with a time limit for small events and fall back to LNS.
+The strategy interface makes that a configuration change.
 | 4 | **Min-cost flow** relaxation | Lower bound + warm start | any | stretch |
 | 5 | **OR-Tools Routing** (CVRP, single depot) | Mid-scale reference point | ≤ 300 | later |
 
@@ -810,13 +931,13 @@ assignment. Hypothesis will find solver bugs faster than manual testing will.
 
 | Layer | Choice | Reason |
 |---|---|---|
-| DB | Postgres 16 + PostGIS (Neon free tier) | Correct spherical distance, GiST indexes, `SKIP LOCKED`. Scale-to-zero on free tier. |
+| DB | Postgres 16 + PostGIS, self-hosted in Docker on the VM | Correct spherical distance, GiST indexes, `SKIP LOCKED`. Same image as development; no free-tier compute limits (§10.1). |
 | ORM | SQLAlchemy 2.0 async + Alembic | Migrations from commit one. |
 | API | FastAPI + Pydantic v2 | OpenAPI → generated TypeScript client. |
 | Queue | Postgres `SKIP LOCKED` (see §4.2) | Zero added infra; transactional with domain writes. |
-| Routing | OSRM local (bench) / ORS or Mapbox (prod) / haversine (fallback), one interface | $0. |
-| Geocoding | Frontend address autocomplete | Eliminates server-side geocoding entirely. |
-| Solver | OR-Tools CP-SAT + hand-written greedy & LNS | Exact bound + owned heuristic. |
+| Routing | OSRM local (bench) / ORS (prod) / haversine (fallback), one interface | $0. One matrix request per event (§4.4). |
+| Geocoding | Address autocomplete in the UI, proxied through the API | The provider key never reaches the browser (§4.4). |
+| Solver | Hand-written greedy & LNS in production; OR-Tools CP-SAT in benchmarks only | Owned heuristic + exact bound to measure it against (§8.3). |
 | Realtime | Polling (TanStack Query); SSE later | Unidirectional channel; no connection state. |
 | Maps | MapLibre GL + OSM tiles | Free and OSS; consistent with OSRM. |
 | Frontend | Next.js App Router, TypeScript, Tailwind, TanStack Query (Vercel free tier) | Mobile-first. |
@@ -824,19 +945,19 @@ assignment. Hypothesis will find solver bugs faster than manual testing will.
 | Lint/types | Ruff + mypy (strict on `domain/`) | Strict where it matters. |
 | Observability | structlog JSON + Sentry free tier (+ OpenTelemetry later) | $0. |
 | CI | GitHub Actions | — |
-| Hosting | Vercel (web, free) + **one always-on VPS** running api + worker as separate processes + Neon (db, free) | ~$5–11/month. See §10.1. |
+| Hosting | Vercel (web, free) + **one always-on AWS Lightsail VM** running Caddy, api, worker, and Postgres | $12/month, covered by AWS credits for ~12 months. See §10.1. |
 
 ### 10.1 Deployment topology
 
 A single always-on VM, Docker Compose, Caddy in front for automatic TLS:
 
 ```
-Vercel (free) ──────► Caddy :443  ── auto TLS
-                        │
+Vercel (free) ──────► Caddy :443  ── auto TLS          AWS Lightsail, us-east-1
+                        │                              2 GB / 2 vCPU, $12/month
                         ├─► api      (uvicorn, FastAPI)
                         └─► worker   (same image, different entrypoint)
                                 │
-                                └─► Neon Postgres (managed, free tier)
+                        postgres     (postgis/postgis, no published port)
 ```
 
 **API and worker are separate processes, co-located on one machine.** This is the important
@@ -844,21 +965,44 @@ distinction: the architecture is genuinely two-tier — independent process life
 isolation, a real queue between them — and moving the worker to its own machine later is a deploy
 config change, not a refactor. Co-locate the processes; do not co-mingle the code.
 
-**Why an always-on box rather than scale-to-zero:** it resolves §11 item 3 (the `SKIP LOCKED`
+**Why an always-on box rather than scale-to-zero:** it resolves §11 item 2 (the `SKIP LOCKED`
 worker must be running to poll), and it removes cold-start latency on a portfolio link that a
-recruiter will open cold. At this scale the box is idle almost always, which is fine — it costs
-single-digit dollars.
+recruiter will open cold. At this scale the box is idle almost always, which is fine.
 
-**Sizing:** ~250 MB for the API, ~400 MB for a worker running CP-SAT at n ≈ 40. 1 GB works, 2 GB is
-comfortable. OSRM stays on the dev machine (§4.4) and is never deployed, so it does not factor in.
+**Why Lightsail** (decided 2026-09-10): fixed monthly billing with IPv4 and 3 TB transfer included
+— no egress, NAT, or load-balancer line items — in `us-east-1`, which serves the whole US (§2.4).
+New AWS accounts receive up to $200 in credits valid 12 months, which covers the $12 plan for the
+year — provided the credits apply to Lightsail, which the first bill confirms. Hetzner was cheaper on paper, but its cost-optimized line was sold out and its next tier
+started at $14.09. Use the $12 plan *with* IPv4, not the $10 IPv6-only variant: IPv4-only client
+networks could not reach it. Manage it from the console and deploy over SSH, so no AWS access keys
+exist to leak.
 
-**If the host is AWS, avoid the standard bill traps.** A single instance in a *public* subnet with a
+**Why Postgres on the box rather than managed** (reverses the earlier choice of Neon, 2026-09-10):
+Neon's free plan allows 100 CU-hours per month; a worker polling every second never lets the
+database suspend, which at the smallest compute size is ~183 CU-hours (730 h × 0.25 CU). Fitting
+the allowance would mean engineering around the free tier — wake-on-enqueue, cold starts on the
+first request. Self-hosting instead gives guaranteed PostGIS, sub-millisecond queries, no pooler
+constraints, and parity with the development image. The cost is ~250 MB of RAM and owning backups.
+
+**The database port is never published.** The development `docker-compose.yml` maps `5432:5432`,
+which binds every interface — and Docker's port publishing bypasses the host firewall. The
+production compose file publishes no database port; api and worker reach Postgres over the
+compose network. The Lightsail firewall allows only 22, 80, and 443.
+
+**Sizing (estimates, to be measured):** ~250 MB API, ~150–250 MB worker (greedy + LNS; CP-SAT is
+not deployed, §8.3), ~250 MB Postgres, ~300 MB Caddy + OS — roughly 1–1.1 GB of the 2 GB plan, plus
+a swap file as a safety margin. OSRM stays on the dev machine (§4.4) and is never deployed.
+
+**AWS bill traps, should this ever move to EC2.** A single instance in a *public* subnet with a
 security group, and Caddy terminating TLS. No Application Load Balancer (~$16/mo), no NAT Gateway
-(~$32/mo) — both cost more than the compute they would front here. Set a billing budget alert before
-launching anything.
+(~$32/mo) — both cost more than the compute they would front here. On Lightsail the same rule
+applies to its add-ons: no managed database, load balancer, or object storage, which also keeps the
+deployment portable to any other host (including a home server behind Cloudflare Tunnel). A
+zero-spend budget and a monthly cost budget with forecast alerts are set before launching anything.
 
-**Backups:** nightly `pg_dump` to object storage, plus at least one rehearsed restore. Managed
-Postgres makes this mostly redundant at first, but the restore drill is worth doing once regardless.
+**Backups are load-bearing.** With Postgres self-hosted, the nightly `pg_dump` to object storage
+(Cloudflare R2, off AWS so it survives an account problem) is the *only* copy. It runs from the
+first real event, and at least one restore is rehearsed before the project is presented.
 
 ### Deferred infrastructure, and its trigger
 
@@ -870,6 +1014,8 @@ Postgres makes this mostly redundant at first, but the restore drill is worth do
 | Accounts | Organizers ask for event history across devices |
 | AWS ECS + Terraform | The project has proven itself and the migration is worth writing up |
 | A dedicated worker machine | One worker's solve queue backs up, or a runaway solve starves the API |
+| Managed Postgres (RDS, Neon paid) | Operating the database becomes a measurable cost, or the data must outlive the VM |
+| CP-SAT in production | Benchmarks show LNS > ~5% off optimal on small events (§8.3) |
 | Flexible drivers (`Role.EITHER`, §2.3) | The coordinator wants the system to choose how many cars go, not just who rides in them |
 
 Migrating from a PaaS to ECS on Terraform is a *better* story than having started there, and it
@@ -881,6 +1027,18 @@ defers the cost until the project has earned it.
 
 Limits and terms change often, so these are questions to answer rather than facts to trust. Ordered
 by blast radius: the first four can force a design change, the rest only affect cost or polish.
+
+**Status as of 2026-09-10 — all Tier 1 design blockers are resolved:**
+
+| Item | Resolution |
+|---|---|
+| 1. Matrix limits | **Resolved.** ORS allows 3,500 sources × destinations per request; the 50-participant cap keeps every event to one call. Verified with a live 51-point request (§4.4). |
+| 2. Always-on process | **Resolved.** A VM runs whatever is started on it (§10.1). |
+| 3. PostGIS on managed Postgres | **Moot.** Postgres is self-hosted from the `postgis/postgis` image; Neon's free compute allowance could not sustain a polling worker (§10.1). |
+| 4. Geocoding provider | Open, still reversible. ORS geocoding (3,000/day) is the default candidate. |
+| 6. Backend host | **Resolved.** AWS Lightsail, 2 GB, `us-east-1` (§10.1). |
+| 7. Managed Postgres | **Moot** (see 3). |
+| 5, 8–12 | Open; none blocks Week 2. |
 
 ### Tier 1 — could force a design change
 
@@ -944,7 +1102,7 @@ free CI and good for the portfolio; decide early, because scrubbing history late
 after preprocessing (CH and MLD have different memory profiles). Local-only, so this is a laptop
 constraint, not a hosting cost.
 
-### Still open
+### Answered 2026-09-10
 
-- Does club tennis want return-leg coordination badly enough to pull it forward from "later"?
-- Default `pickup_precision` for a campus roster: exact address, or building/street level?
+- *Does club tennis want return-leg coordination in v1?* Yes — with the same riders both ways (§2.4).
+- *Default `pickup_precision` for a campus roster?* Exact address (§2.4).
