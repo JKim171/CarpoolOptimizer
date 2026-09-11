@@ -86,7 +86,8 @@ Independent of the API, so it runs alongside it and is ready for the Week 3 depl
   SSH, Docker installed through user data, a swap file.
 - IAM instance role scoped to the backup bucket; S3 backup bucket with versioning and a lifecycle
   rule.
-- GitHub Actions OIDC provider and a deploy role scoped to this repository.
+- GitHub Actions OIDC provider and a deploy role scoped to this repository, allowed to send only the
+  custom deploy SSM document, only to this instance.
 - CloudWatch alarms: status check failure, CPU credit balance, disk usage.
 
 **Done when:** `terraform apply` from nothing yields an instance you can open a shell on through
@@ -109,7 +110,8 @@ The most important week in the plan.
 - Manual pin + re-optimize, so the coordinator can override the solver and keep going.
 - Job status polling via TanStack Query.
 - Deploy: Vercel (web) + the Terraform-built EC2 instance running Caddy, api, and Postgres under
-  Docker Compose (`design.md` §10.1), deployed by GitHub Actions through OIDC. Production compose
+  Docker Compose (`design.md` §10.1), deployed by GitHub Actions through OIDC and SSM Run Command,
+  with images from GHCR. Production compose
   publishes no database port. Real domain, HTTPS.
 - Nightly `pg_dump` to S3 through the instance role **before** the first real event — with
   Postgres self-hosted it is the only copy of the data.

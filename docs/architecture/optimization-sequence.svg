@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 590" role="img" aria-label="Sequence of one optimization. The phone posts to the api, which inserts a queued job in Postgres and immediately returns a job id. The worker claims the job with SKIP LOCKED and a five-minute lease, fetches drive times from OpenRouteService in one matrix call, runs greedy then LNS then validation, and writes the solution and marks the job succeeded in one transaction. Meanwhile the phone polls the job every second until it succeeds. Until week 4 the api runs steps four through seven itself.">
+<style>
+  svg { --ground:#EEF2F0; --surface:#FFFFFF; --box:#F7FAF8; --ink:#15201C; --muted:#56645E;
+        --rule:#C3CDC8; --aws:#0B6964; --aws-tint:#E2EEEB; --accent:#B86A00; --accent-text:#8A4F00; --accent-ink:#FFFFFF; }
+  @media (prefers-color-scheme: dark) {
+    svg { --ground:#0F1513; --surface:#161E1B; --box:#1A2421; --ink:#E2EAE6; --muted:#93A29C;
+          --rule:#3A4843; --aws:#4DB8AE; --aws-tint:#12201D; --accent:#F0A63A; --accent-text:#F4B85E; --accent-ink:#1A1206; }
+  }
+  .bg { fill: var(--ground); }
+  .region { fill: var(--aws-tint); stroke: var(--aws); stroke-width: 1.5; }
+  .vpc { fill: none; stroke: var(--aws); stroke-width: 1; }
+  .sg { fill: none; stroke: var(--aws); stroke-width: 1; stroke-dasharray: 6 4; }
+  .host { fill: var(--box); stroke: var(--ink); stroke-width: 1.5; }
+  .node { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+  .ext { fill: var(--surface); stroke: var(--ink); stroke-width: 1; }
+  .svc { fill: var(--surface); stroke: var(--aws); stroke-width: 1; }
+  .selfbox { fill: var(--surface); stroke: var(--ink); stroke-width: 1; }
+  .tt { font: 600 13px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  .ts { font: 400 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--muted); }
+  .tb { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--aws); }
+  .ta { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--accent-text); }
+  .tl { font: 400 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--ink); }
+  .flow { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+  .reply { stroke: var(--ink); stroke-width: 1.25; stroke-dasharray: 5 4; fill: none; }
+  .ctl { stroke: var(--aws); stroke-width: 1.5; stroke-dasharray: 6 4; fill: none; }
+  .sched { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 4; fill: none; }
+  .inbound { stroke: var(--accent); stroke-width: 2.5; fill: none; }
+  .life { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 4; }
+  .bracket { stroke: var(--muted); stroke-width: 1.25; fill: none; }
+  .mk-ink { fill: var(--ink); } .mk-aws { fill: var(--aws); } .mk-mut { fill: var(--muted); } .mk-acc { fill: var(--accent); }
+  .dot { fill: var(--accent); }
+  .dot-n { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--accent-ink); }
+</style>
+          <defs>
+            <marker id="f2-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-ink"/></marker>
+          </defs>
+  <rect class="bg" x="0" y="0" width="100%" height="100%"/>
+
+          <rect x="50" y="20" width="160" height="40" rx="3" class="ext"/>
+          <text x="130" y="45" text-anchor="middle" class="tt">Phone</text>
+          <rect x="260" y="20" width="160" height="40" rx="3" class="node"/>
+          <text x="340" y="45" text-anchor="middle" class="tt">api</text>
+          <rect x="470" y="20" width="160" height="40" rx="3" class="node"/>
+          <text x="550" y="45" text-anchor="middle" class="tt">Postgres</text>
+          <rect x="680" y="20" width="160" height="40" rx="3" class="node"/>
+          <text x="760" y="45" text-anchor="middle" class="tt">worker</text>
+          <rect x="890" y="20" width="160" height="40" rx="3" class="ext"/>
+          <text x="970" y="45" text-anchor="middle" class="tt">OpenRouteService</text>
+
+          <line x1="130" y1="60" x2="130" y2="578" class="life"/>
+          <line x1="340" y1="60" x2="340" y2="578" class="life"/>
+          <line x1="550" y1="60" x2="550" y2="578" class="life"/>
+          <line x1="760" y1="60" x2="760" y2="578" class="life"/>
+          <line x1="970" y1="60" x2="970" y2="578" class="life"/>
+
+          <!-- 1 -->
+          <circle cx="24" cy="110" r="10" class="dot"/><text x="24" y="114" text-anchor="middle" class="dot-n">1</text>
+          <path d="M130,110 H338" class="flow" marker-end="url(#f2-ink)"/>
+          <text x="235" y="102" text-anchor="middle" class="tl">POST /optimizations</text>
+          <!-- 2 -->
+          <circle cx="24" cy="160" r="10" class="dot"/><text x="24" y="164" text-anchor="middle" class="dot-n">2</text>
+          <path d="M340,160 H548" class="flow" marker-end="url(#f2-ink)"/>
+          <text x="445" y="152" text-anchor="middle" class="tl">INSERT job · queued</text>
+          <text x="445" y="176" text-anchor="middle" class="ts">one active job per event</text>
+          <!-- 3 -->
+          <circle cx="24" cy="210" r="10" class="dot"/><text x="24" y="214" text-anchor="middle" class="dot-n">3</text>
+          <path d="M340,210 H132" class="reply" marker-end="url(#f2-ink)"/>
+          <text x="235" y="202" text-anchor="middle" class="tl">202 · job_id</text>
+          <!-- 4 -->
+          <circle cx="24" cy="280" r="10" class="dot"/><text x="24" y="284" text-anchor="middle" class="dot-n">4</text>
+          <path d="M760,280 H552" class="flow" marker-end="url(#f2-ink)"/>
+          <text x="655" y="272" text-anchor="middle" class="tl">claim · SKIP LOCKED</text>
+          <text x="655" y="296" text-anchor="middle" class="ts">5-minute lease</text>
+          <!-- 5 -->
+          <circle cx="24" cy="340" r="10" class="dot"/><text x="24" y="344" text-anchor="middle" class="dot-n">5</text>
+          <path d="M760,340 H968" class="flow" marker-end="url(#f2-ink)"/>
+          <text x="865" y="332" text-anchor="middle" class="tl">1 matrix call · ≤ 51×51</text>
+          <text x="865" y="356" text-anchor="middle" class="ts">geocode cache misses first</text>
+          <!-- 6 -->
+          <circle cx="24" cy="400" r="10" class="dot"/><text x="24" y="404" text-anchor="middle" class="dot-n">6</text>
+          <rect x="665" y="382" width="190" height="36" rx="3" class="selfbox"/>
+          <text x="760" y="405" text-anchor="middle" class="tl">greedy → LNS → validate()</text>
+          <!-- 7 -->
+          <circle cx="24" cy="460" r="10" class="dot"/><text x="24" y="464" text-anchor="middle" class="dot-n">7</text>
+          <path d="M760,460 H552" class="flow" marker-end="url(#f2-ink)"/>
+          <text x="655" y="452" text-anchor="middle" class="tl">write solution + routes</text>
+          <text x="655" y="476" text-anchor="middle" class="ts">job succeeded · same transaction</text>
+          <!-- 8 -->
+          <circle cx="24" cy="522" r="10" class="dot"/><text x="24" y="526" text-anchor="middle" class="dot-n">8</text>
+          <path d="M130,522 H338" class="flow" marker-end="url(#f2-ink)"/>
+          <text x="235" y="514" text-anchor="middle" class="tl">GET job · every 1 s</text>
+          <path d="M340,552 H132" class="reply" marker-end="url(#f2-ink)"/>
+          <text x="235" y="572" text-anchor="middle" class="ts">succeeded → show the cars</text>
+
+          <!-- Week 2 bracket -->
+          <path d="M1062,262 H1070 V478 H1062" class="bracket"/>
+          <text transform="translate(1088,370) rotate(-90)" text-anchor="middle" class="ts">week 2: api runs 4–7 inline</text>
+        </svg>

@@ -917,9 +917,9 @@ Each concern maps to a concrete part of the system:
 | AuthZ | Three principals, per-audience response schemas, address redaction gated on solution state |
 | Testing | Pure solver unit tests; testcontainers integration tests against real Postgres; Hypothesis property tests asserting feasibility invariants; benchmark regression gate |
 | Observability | Structured JSON logs with job correlation ids; solve-time histograms by algorithm and n; Sentry; CloudWatch alarms on instance health |
-| Infrastructure as code | Terraform: VPC, security group, EC2, IAM instance role, backup bucket, GitHub OIDC role (§10.1) |
+| Infrastructure as code | Terraform: VPC, security group, EC2, IAM instance role, backup bucket, GitHub OIDC role, deploy SSM document (§10.1) |
 | Credential hygiene | No long-lived AWS credentials anywhere: instance role for S3, SSM instead of SSH, OIDC for CI, SSO for the developer |
-| CI/CD | lint → typecheck → unit → integration → benchmark gate → build arm64 image → deploy via OIDC |
+| CI/CD | lint → typecheck → unit → integration → benchmark gate → build arm64 image → push to GHCR → deploy via OIDC and SSM Run Command |
 
 Property-based testing is the cheapest high-value item on this list: generate random instances,
 assert every returned solution satisfies capacity, time windows, detour caps, and exactly-once
@@ -951,7 +951,8 @@ assignment. Hypothesis will find solver bugs faster than manual testing will.
 ### 10.1 Deployment topology
 
 A single always-on EC2 instance, Docker Compose, Caddy in front for automatic TLS, all provisioned
-by Terraform:
+by Terraform. Full diagrams, including the request sequence and credential map, are in
+[`architecture/`](architecture/).
 
 ```
 Vercel (free) ──────► Caddy :443  ── auto TLS     EC2 t4g.small (Graviton, arm64)
@@ -998,6 +999,32 @@ rules are about keeping secrets out of reach, that is the wrong default. EC2 rem
 
 The result is that **no long-lived AWS credential exists anywhere**: the instance has a role, CI
 has OIDC, and the developer uses short-lived IAM Identity Center (SSO) sessions for Terraform.
+
+**How a deploy runs.** CI builds the arm64 image and pushes it to GitHub's container registry
+(GHCR), tagged with the commit SHA. It then assumes the deploy role through OIDC and issues an SSM
+Run Command; the SSM agent on the instance — which holds an outbound connection to Systems Manager,
+so no inbound port is involved — pulls the image, runs migrations, and restarts the api and worker.
+CI waits for the command's exit status, so a failed deploy fails the workflow. Rolling back is the
+same command with the previous SHA.
+
+- **Build in CI, not on the instance.** A `t4g.small` would build slowly and spend the CPU credits
+  the solver needs.
+- **The image package is public**, like the repository, so the instance pulls without a registry
+  credential — a private registry would put a long-lived GitHub token on the machine. The
+  consequence is a rule: nothing secret is ever baked into an image. Secrets come from the host's
+  environment.
+- **The deploy role can run exactly one thing.** AWS's stock `AWS-RunShellScript` document runs any
+  command as root, so a role allowed to send it is effectively root on the instance. Instead,
+  Terraform defines a custom SSM document that runs a fixed deploy script whose only parameter is
+  the image tag, validated against `^[0-9a-f]{40}$`, and the deploy role may send only that document,
+  only to this instance. A compromised workflow can at worst deploy another build of this
+  repository.
+
+Rejected: SSH from CI (reopens port 22 and stores a private key in GitHub), an on-instance registry
+poller such as Watchtower (CI never learns whether the deploy worked, and migrations cannot be
+ordered before the restart), and CodeDeploy (more machinery than one instance needs). The cost is a
+few seconds of downtime while containers restart; a solve interrupted by it is reclaimed when its
+lease expires (§4.2).
 
 **Why `t4g.small`.** 2 vCPU and 2 GB, the same shape as the Lightsail plan. Graviton (arm64) is
 ~$3/month cheaper than the x86 `t3.small`, and it matches the development machine (Apple Silicon),
