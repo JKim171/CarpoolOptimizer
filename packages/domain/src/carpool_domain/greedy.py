@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from .models import DESTINATION, ProblemInstance, Role, Route, Solution, schedule_backward
+from .models import DESTINATION, ProblemInstance, Role, Route, Solution, outbound_schedule
 from .objective import route_metrics
 from .sequence import resequence
 
@@ -46,7 +46,7 @@ def _feasible(instance: ProblemInstance, route: Route) -> bool:
     for passenger_id in route.passengers:
         if instance.participant(passenger_id).pinned_driver_id not in (None, driver.id):
             return False
-    pickups = schedule_backward(instance.matrix, route.outbound_path, instance.arrival_by)
+    pickups = outbound_schedule(instance, route)
     for participant_id in (route.driver_id, *route.outbound):
         participant = instance.participant(participant_id)
         if (

@@ -150,14 +150,18 @@ class ProblemInstance:
     """A fully specified optimization problem. Contains no identifiers from the storage layer."""
 
     destination: Location
-    #: Everyone must be at the destination by this time; schedules are computed backward from it.
+    #: Everyone must be at the destination by this time; pickups are scheduled backward from it.
     arrival_by: int
+    #: When the event ends and the return leg leaves; drop-offs are scheduled forward from it.
+    ends_at: int
     participants: tuple[Participant, ...]
     matrix: TravelMatrix
     weights: ObjectiveWeights = field(default_factory=ObjectiveWeights)
     _index: dict[str, Participant] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        if self.ends_at <= self.arrival_by:
+            raise ValueError("ends_at must be after arrival_by")
         index = {p.id: p for p in self.participants}
         if len(index) != len(self.participants):
             raise ValueError("duplicate participant ids")
@@ -238,3 +242,20 @@ def schedule_backward(
     is what falls out of it. Return legs schedule forward from the event end instead.
     """
     return schedule_forward(matrix, path, arrive_by - matrix.path_duration(path))
+
+
+def outbound_schedule(instance: ProblemInstance, route: Route) -> dict[NodeId, int]:
+    """Pickup time at each stop, the driver's departure from home included.
+
+    Counted backward from `arrival_by`, so the car reaches the destination exactly on time.
+    """
+    return schedule_backward(instance.matrix, route.outbound_path, instance.arrival_by)
+
+
+def inbound_schedule(instance: ProblemInstance, route: Route) -> dict[NodeId, int]:
+    """Drop-off time at each stop, the driver's arrival home included.
+
+    Counted forward from `ends_at`, over the directions leading away from the destination -- which
+    on an asymmetric matrix are not the outbound durations reversed (docs/design.md 8.2).
+    """
+    return schedule_forward(instance.matrix, route.inbound_path, instance.ends_at)

@@ -19,6 +19,8 @@ from .models import (
     TravelMatrix,
     haversine_matrix,
     haversine_meters,
+    inbound_schedule,
+    outbound_schedule,
     schedule_backward,
     schedule_forward,
 )
@@ -49,6 +51,8 @@ __all__ = [
     "greedy",
     "haversine_matrix",
     "haversine_meters",
+    "inbound_schedule",
+    "outbound_schedule",
     "resequence",
     "route_metrics",
     "schedule_backward",

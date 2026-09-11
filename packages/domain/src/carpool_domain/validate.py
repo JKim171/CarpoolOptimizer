@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from .models import ProblemInstance, Solution, schedule_backward
+from .models import ProblemInstance, Solution, outbound_schedule
 from .objective import route_metrics
 
 
@@ -87,7 +87,7 @@ def validate(instance: ProblemInstance, solution: Solution) -> list[Violation]:
                 )
             )
 
-        pickups = schedule_backward(instance.matrix, route.outbound_path, instance.arrival_by)
+        pickups = outbound_schedule(instance, route)
         for participant_id in (route.driver_id, *route.outbound):
             participant = instance.participant(participant_id)
             if (
