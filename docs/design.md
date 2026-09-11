@@ -1043,9 +1043,10 @@ $14.09, with the same stored-credential problem for off-box backups.
 
 **The PostGIS image must be multi-arch.** `postgis/postgis` publishes amd64 only (checked on Docker
 Hub, 2026-09-10) — it already runs under emulation on the Apple Silicon dev machine and would do
-so on Graviton. Build a small image instead, `FROM postgres:16` plus Debian's
-`postgresql-16-postgis-3` package; both are published for arm64 and amd64. One image, native
-everywhere.
+so on Graviton. Build a small image instead, `FROM postgres:16` plus the
+`postgresql-16-postgis-3` package from the PostgreSQL apt repository the base image already
+carries; both are published for arm64 and amd64. One image, native everywhere, including the amd64
+CI runners that will build it for integration tests (`docker/postgres/Dockerfile`).
 
 **Terraform state never enters the repository.** State files can hold secrets in plain text and
 this repository is public. State lives in an S3 backend; `*.tfstate*` and `.terraform/` are
