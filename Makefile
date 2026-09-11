@@ -20,4 +20,4 @@ typecheck:
 check: lint typecheck test
 
 db:
-	docker compose up -d postgres
+	docker compose up -d --build postgres
