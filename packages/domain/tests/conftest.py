@@ -10,6 +10,7 @@ from carpool_domain import (
 )
 
 ARRIVAL = 1_000_000
+ENDS_AT = ARRIVAL + 7_200
 
 # Hand-chosen so every quantity in the tests can be verified by inspection.
 _SYMMETRIC = {
@@ -36,6 +37,7 @@ def instance() -> ProblemInstance:
     return ProblemInstance(
         destination=Location(43.07, -89.41),
         arrival_by=ARRIVAL,
+        ends_at=ENDS_AT,
         participants=(
             Participant("d", Location(43.08, -89.43), role=Role.DRIVER, seats=2),
             Participant("a", Location(43.07, -89.42)),

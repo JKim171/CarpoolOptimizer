@@ -97,6 +97,7 @@ def test_asymmetric_travel_times_break_the_reversal():
     instance = ProblemInstance(
         destination=Location(0.0, 0.0),
         arrival_by=0,
+        ends_at=1,
         participants=(
             Participant("D", Location(0.0, 0.0), role=Role.DRIVER, seats=2),
             Participant("x", Location(0.0, 0.0)),

@@ -39,6 +39,9 @@ DEFAULT_DESTINATION = Location(43.0731, -89.4012)
 #: Arbitrary fixed instant; only differences between times are ever meaningful.
 DEFAULT_ARRIVAL = 1_700_000_000
 
+#: A two-hour practice. Only affects when the return leg leaves, never the objective.
+DEFAULT_EVENT_DURATION_SECONDS = 2 * 60 * 60
+
 _METERS_PER_DEGREE_LAT = 111_320.0
 #: Fraction of participants who could drive but are willing to ride instead. These are where
 #: vehicle-count savings come from, so an instance without any is unrealistically rigid.
@@ -96,6 +99,7 @@ def generate_instance(
     radius_km: float = 8.0,
     destination: Location = DEFAULT_DESTINATION,
     arrival_by: int = DEFAULT_ARRIVAL,
+    event_duration_seconds: int = DEFAULT_EVENT_DURATION_SECONDS,
     weights: ObjectiveWeights | None = None,
     max_detour_seconds: int | None = None,
 ) -> ProblemInstance:
@@ -134,6 +138,7 @@ def generate_instance(
     return ProblemInstance(
         destination=destination,
         arrival_by=arrival_by,
+        ends_at=arrival_by + event_duration_seconds,
         participants=tuple(participants),
         matrix=haversine_matrix(nodes),
         weights=weights if weights is not None else ObjectiveWeights(),
