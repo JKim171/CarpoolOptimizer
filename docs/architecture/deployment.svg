@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 830" role="img" aria-label="Deployment topology. Phones reach the web app on Vercel and send API calls over HTTPS to Caddy on a single EC2 instance, the only inbound path. Caddy proxies to the api; the api and worker share a Postgres container whose port is never published. The worker calls OpenRouteService once per solve. GitHub Actions deploys through an OIDC role, SSM provides shell access and runs deploys, Postgres dumps nightly to a versioned S3 bucket through the instance role, and CloudWatch alarms watch the instance. The developer laptop provisions everything with Terraform and runs benchmarks locally.">
+<style>
+  svg { --ground:#EEF2F0; --surface:#FFFFFF; --box:#F7FAF8; --ink:#15201C; --muted:#56645E;
+        --rule:#C3CDC8; --aws:#0B6964; --aws-tint:#E2EEEB; --accent:#B86A00; --accent-text:#8A4F00; --accent-ink:#FFFFFF; }
+  @media (prefers-color-scheme: dark) {
+    svg { --ground:#0F1513; --surface:#161E1B; --box:#1A2421; --ink:#E2EAE6; --muted:#93A29C;
+          --rule:#3A4843; --aws:#4DB8AE; --aws-tint:#12201D; --accent:#F0A63A; --accent-text:#F4B85E; --accent-ink:#1A1206; }
+  }
+  .bg { fill: var(--ground); }
+  .region { fill: var(--aws-tint); stroke: var(--aws); stroke-width: 1.5; }
+  .vpc { fill: none; stroke: var(--aws); stroke-width: 1; }
+  .sg { fill: none; stroke: var(--aws); stroke-width: 1; stroke-dasharray: 6 4; }
+  .host { fill: var(--box); stroke: var(--ink); stroke-width: 1.5; }
+  .node { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+  .ext { fill: var(--surface); stroke: var(--ink); stroke-width: 1; }
+  .svc { fill: var(--surface); stroke: var(--aws); stroke-width: 1; }
+  .selfbox { fill: var(--surface); stroke: var(--ink); stroke-width: 1; }
+  .tt { font: 600 13px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  .ts { font: 400 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--muted); }
+  .tb { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--aws); }
+  .ta { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--accent-text); }
+  .tl { font: 400 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--ink); }
+  .flow { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+  .reply { stroke: var(--ink); stroke-width: 1.25; stroke-dasharray: 5 4; fill: none; }
+  .ctl { stroke: var(--aws); stroke-width: 1.5; stroke-dasharray: 6 4; fill: none; }
+  .sched { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 4; fill: none; }
+  .inbound { stroke: var(--accent); stroke-width: 2.5; fill: none; }
+  .life { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 4; }
+  .bracket { stroke: var(--muted); stroke-width: 1.25; fill: none; }
+  .mk-ink { fill: var(--ink); } .mk-aws { fill: var(--aws); } .mk-mut { fill: var(--muted); } .mk-acc { fill: var(--accent); }
+  .dot { fill: var(--accent); }
+  .dot-n { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--accent-ink); }
+</style>
+          <defs>
+            <marker id="f1-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-ink"/></marker>
+            <marker id="f1-aws" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-aws"/></marker>
+            <marker id="f1-mut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-mut"/></marker>
+            <marker id="f1-acc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-acc"/></marker>
+          </defs>
+  <rect class="bg" x="0" y="0" width="100%" height="100%"/>
+
+          <!-- Outside parties -->
+          <rect x="24" y="24" width="210" height="88" rx="4" class="ext"/>
+          <text x="40" y="50" class="tt">Phones &amp; browsers</text>
+          <text x="40" y="70" class="ts">coordinator, drivers, riders</text>
+          <text x="40" y="90" class="ts">no install, no account</text>
+
+          <rect x="304" y="24" width="212" height="88" rx="4" class="ext"/>
+          <text x="320" y="50" class="tt">Vercel · free tier</text>
+          <text x="320" y="70" class="ts">Next.js web app, MapLibre</text>
+          <text x="320" y="90" class="ts">week 3</text>
+
+          <path d="M234,68 H302" class="flow" marker-end="url(#f1-ink)"/>
+          <text x="268" y="60" text-anchor="middle" class="ts">pages</text>
+
+          <rect x="620" y="24" width="240" height="88" rx="4" class="ext"/>
+          <text x="636" y="50" class="tt">OpenRouteService</text>
+          <text x="636" y="70" class="ts">matrix · directions · geocoding</text>
+          <text x="636" y="90" class="ts">free plan · 500 matrix calls/day</text>
+
+          <rect x="900" y="24" width="236" height="88" rx="4" class="ext"/>
+          <text x="916" y="50" class="tt">GitHub Actions</text>
+          <text x="916" y="70" class="ts">CI: lint, types, tests · built</text>
+          <text x="916" y="90" class="ts">deploy: arm64 image → GHCR</text>
+
+          <!-- AWS region -->
+          <rect x="24" y="160" width="1112" height="548" rx="6" class="region"/>
+          <text x="40" y="700" class="tb">AWS · us-east-1 (N. Virginia)</text>
+          <text x="1120" y="700" text-anchor="end" class="ts">budgets: zero-spend + $15/month alerts</text>
+
+          <rect x="48" y="196" width="672" height="488" rx="4" class="vpc"/>
+          <text x="704" y="216" text-anchor="end" class="tb">VPC · one public subnet · internet gateway · no NAT</text>
+
+          <rect x="72" y="228" width="624" height="432" rx="4" class="sg"/>
+          <text x="680" y="248" text-anchor="end" class="tb">security group · inbound 80, 443 only · no port 22</text>
+
+          <rect x="96" y="260" width="576" height="380" rx="4" class="host"/>
+          <text x="656" y="284" text-anchor="end" class="tt">EC2 t4g.small · 2 vCPU Graviton · 2 GiB · Docker Compose</text>
+
+          <!-- Containers -->
+          <rect x="120" y="300" width="528" height="48" rx="3" class="node"/>
+          <text x="184" y="320" class="tt">Caddy</text>
+          <text x="184" y="338" class="ts">TLS with automatic certificates · :443</text>
+          <text x="632" y="320" text-anchor="end" class="ts">week 3</text>
+
+          <rect x="120" y="396" width="250" height="72" rx="3" class="node"/>
+          <text x="136" y="418" class="tt">api · FastAPI</text>
+          <text x="136" y="436" class="ts">events, roster, jobs, results</text>
+          <text x="136" y="454" class="ts">week 2 · solves inline at first</text>
+
+          <rect x="398" y="396" width="250" height="72" rx="3" class="node"/>
+          <text x="414" y="418" class="tt">worker · same image</text>
+          <text x="414" y="436" class="ts">claims jobs · greedy → LNS</text>
+          <text x="414" y="454" class="ts">week 4 · no inbound port</text>
+
+          <rect x="120" y="516" width="528" height="64" rx="3" class="node"/>
+          <text x="136" y="538" class="tt">Postgres 16 + PostGIS</text>
+          <text x="136" y="556" class="ts">domain tables · job queue · travel and geocode caches</text>
+          <text x="136" y="572" class="ts">port 5432 never published · week 2</text>
+
+          <!-- Runtime flows inside the instance -->
+          <path d="M245,348 V394" class="flow" marker-end="url(#f1-ink)"/>
+          <text x="255" y="376" class="ts">proxies /v1/*</text>
+          <path d="M245,468 V514" class="flow" marker-end="url(#f1-ink)"/>
+          <text x="255" y="496" class="ts">enqueue · read</text>
+          <path d="M523,470 V514" class="flow" marker-start="url(#f1-ink)" marker-end="url(#f1-ink)"/>
+          <text x="533" y="496" class="ts">claim · SKIP LOCKED</text>
+
+          <!-- The only inbound path -->
+          <path d="M160,112 V297" class="inbound" marker-end="url(#f1-acc)"/>
+          <text x="172" y="134" class="ta">HTTPS · the only way in</text>
+          <text x="172" y="150" class="ts">JSON API · polls jobs every 1 s</text>
+
+          <!-- Outbound to ORS -->
+          <path d="M648,420 H748 V114" class="flow" marker-end="url(#f1-ink)"/>
+          <text x="760" y="134" class="ts">1 matrix call per solve</text>
+          <text x="760" y="150" class="ts">geocoding, directions: via api</text>
+
+          <!-- AWS services -->
+          <rect x="776" y="196" width="336" height="64" rx="3" class="svc"/>
+          <text x="792" y="218" class="tt">IAM</text>
+          <text x="792" y="236" class="ts">instance role → backup bucket only</text>
+          <text x="792" y="252" class="ts">deploy role ← GitHub OIDC</text>
+
+          <path d="M1018,112 V194" class="ctl" marker-end="url(#f1-aws)"/>
+          <text x="1028" y="140" class="ts">OIDC</text>
+          <text x="1028" y="154" class="ts">deploy role</text>
+
+          <rect x="776" y="280" width="336" height="56" rx="3" class="svc"/>
+          <text x="792" y="302" class="tt">S3 · Terraform state</text>
+          <text x="792" y="322" class="ts">written by terraform · never in git</text>
+
+          <rect x="776" y="420" width="336" height="64" rx="3" class="svc"/>
+          <text x="792" y="442" class="tt">SSM Session Manager</text>
+          <text x="792" y="460" class="ts">shell access with no SSH port</text>
+          <text x="792" y="476" class="ts">runs deploy commands</text>
+          <path d="M776,452 H674" class="ctl" marker-end="url(#f1-aws)"/>
+
+          <rect x="776" y="516" width="336" height="64" rx="3" class="svc"/>
+          <text x="792" y="538" class="tt">S3 · backups</text>
+          <text x="792" y="556" class="ts">nightly pg_dump via instance role</text>
+          <text x="792" y="572" class="ts">versioned · old dumps expire</text>
+          <path d="M648,548 H774" class="sched" marker-end="url(#f1-mut)"/>
+
+          <rect x="776" y="596" width="336" height="64" rx="3" class="svc"/>
+          <text x="792" y="618" class="tt">CloudWatch alarms</text>
+          <text x="792" y="636" class="ts">status check · CPU credits · disk</text>
+          <path d="M672,612 H774" class="sched" marker-end="url(#f1-mut)"/>
+
+          <!-- Laptop -->
+          <rect x="24" y="744" width="440" height="72" rx="4" class="ext"/>
+          <text x="40" y="766" class="tt">Developer laptop</text>
+          <text x="40" y="784" class="ts">terraform apply (SSO session) · SSM shell</text>
+          <text x="40" y="800" class="ts">OSRM + CP-SAT benchmarks · never deployed</text>
+          <path d="M200,744 V711" class="ctl" marker-end="url(#f1-aws)"/>
+          <text x="212" y="731" class="ts">provisions</text>
+
+          <!-- Legend -->
+          <path d="M536,766 H586" class="flow"/>
+          <text x="598" y="770" class="tl">runtime request or data</text>
+          <path d="M536,786 H586" class="ctl"/>
+          <text x="598" y="790" class="tl">provisioning, deploys, admin</text>
+          <path d="M536,806 H586" class="sched"/>
+          <text x="598" y="810" class="tl">scheduled: backups, metrics</text>
+          <path d="M860,766 H910" class="inbound"/>
+          <text x="922" y="770" class="tl">the only inbound path</text>
+        </svg>

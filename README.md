@@ -9,6 +9,7 @@ web app do not yet.
 ## Design
 
 - [`docs/design.md`](docs/design.md) — architecture, schema, API, optimization model
+- [`docs/architecture/`](docs/architecture/) — deployment and request-flow diagrams
 - [`docs/roadmap.md`](docs/roadmap.md) — 6-week delivery plan and cost model
 
 ## Quickstart
