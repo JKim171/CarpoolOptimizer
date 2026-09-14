@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carpool-api"
+version = "0.1.0"
+description = "HTTP API for CarpoolOptimizer. Owns all I/O; imports the pure domain."
+requires-python = ">=3.12"
+dependencies = [
+    "carpool-domain",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "sqlalchemy[asyncio]>=2.0,<3",
+    "asyncpg>=0.30,<1",
+    "alembic>=1.14,<2",
+    "pydantic-settings>=2.7,<3",
+]
+
+[project.optional-dependencies]
+test = ["httpx>=0.28,<1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
