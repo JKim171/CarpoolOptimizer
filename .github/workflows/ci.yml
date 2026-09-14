@@ -19,4 +19,7 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy packages/domain/src apps/api/src
+      # The integration tests run this exact image through testcontainers, so it has to exist
+      # locally first. Without it they skip rather than fail, which would hide a broken schema.
+      - run: docker build -t carpool-postgres:16 docker/postgres
       - run: pytest
