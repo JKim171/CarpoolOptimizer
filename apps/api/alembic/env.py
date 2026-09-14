@@ -3,8 +3,8 @@
 The database URL comes from the environment (`DATABASE_URL`), never from `alembic.ini` -- that file
 is committed and a connection string carries a password.
 
-`target_metadata` stays `None` until the schema lands (docs/design.md 5); autogenerate is not used
-before then.
+`target_metadata` is the models' metadata, so the models are the source of truth and autogenerate
+diffs against them (docs/design.md 5). `test_schema.py` fails the build if the two drift.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from carpool_api.config import get_settings
+from carpool_api.models import Base
 
 config = context.config
 
@@ -26,7 +27,22 @@ if config.config_file_name is not None:
 
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
-target_metadata = None
+target_metadata = Base.metadata
+
+
+#: Tables installed by `create extension postgis` itself. They belong to the extension, not to this
+#: schema, so autogenerate must not propose dropping them -- the drift test could never pass.
+POSTGIS_OWNED_TABLES = {"spatial_ref_sys", "geography_columns", "geometry_columns"}
+
+
+def include_object(
+    obj: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object,
+) -> bool:
+    return not (type_ == "table" and name in POSTGIS_OWNED_TABLES)
 
 
 def run_migrations_offline() -> None:
@@ -36,6 +52,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -43,7 +60,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

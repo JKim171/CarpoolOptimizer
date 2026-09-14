@@ -25,3 +25,7 @@ ignore_errors = true
 [tool.pytest.ini_options]
 testpaths = ["packages/domain/tests", "apps/api/tests"]
 addopts = "-q --strict-markers"
+# Integration tests are async throughout; `auto` keeps a bare `async def test_` working without an
+# opt-in marker on every one.
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
