@@ -2,7 +2,7 @@
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["packages/domain/src"]
+src = ["packages/domain/src", "apps/api/src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ANN", "PT"]
@@ -15,8 +15,13 @@ ignore = ["ANN401"]
 python_version = "3.12"
 strict = true
 warn_unreachable = true
-mypy_path = "packages/domain/src"
+mypy_path = "packages/domain/src:apps/api/src"
+
+# Alembic revisions are generated from a template and are scripts, not library code.
+[[tool.mypy.overrides]]
+module = "alembic.versions.*"
+ignore_errors = true
 
 [tool.pytest.ini_options]
-testpaths = ["packages/domain/tests"]
+testpaths = ["packages/domain/tests", "apps/api/tests"]
 addopts = "-q --strict-markers"

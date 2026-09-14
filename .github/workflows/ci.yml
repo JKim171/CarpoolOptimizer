@@ -5,7 +5,9 @@ on:
   pull_request:
 
 jobs:
-  domain:
+  # These steps mirror `make check`. The Makefile runs them out of .venv/; CI has its own
+  # environment, so the commands are spelled out rather than shelling into the Makefile.
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,8 +15,8 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: pip install -U pip -r requirements-dev.txt -e packages/domain
+      - run: pip install -U pip -r requirements-dev.txt -e packages/domain -e 'apps/api[test]'
       - run: ruff check .
       - run: ruff format --check .
-      - run: mypy packages/domain/src
+      - run: mypy packages/domain/src apps/api/src
       - run: pytest
