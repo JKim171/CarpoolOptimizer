@@ -28,4 +28,8 @@ addopts = "-q --strict-markers"
 # Integration tests are async throughout; `auto` keeps a bare `async def test_` working without an
 # opt-in marker on every one.
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "session"
+# Must match the loop scope tests themselves run in (function), or an async fixture that opens a
+# database connection binds it to a different event loop than the test body uses, and asyncpg fails
+# with "attached to a different loop". The session-scoped fixtures in the integration suite
+# (`postgres_url`, `migrated_url`) are deliberately synchronous, so nothing needs a wider scope.
+asyncio_default_fixture_loop_scope = "function"

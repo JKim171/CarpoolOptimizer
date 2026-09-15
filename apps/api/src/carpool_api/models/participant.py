@@ -85,7 +85,10 @@ class Participant(Base):
     )
     token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[TimestampTz] = mapped_column(server_default=func.now())
+    #: `onupdate` is SQLAlchemy-side, emitted with every UPDATE this mapper issues -- it is not DDL,
+    #: so it needs no migration and autogenerate does not see it. A database trigger would also
+    #: cover hand-written SQL, which is not worth a trigger here: every write goes through the API.
+    updated_at: Mapped[TimestampTz] = mapped_column(server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         CheckConstraint("seats_available >= 0", name="seats_available_non_negative"),

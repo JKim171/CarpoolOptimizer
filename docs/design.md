@@ -596,12 +596,15 @@ POST   /v1/events/{public_id}/lock         [organizer]  freeze submissions
 POST   /v1/events/{public_id}/clone        [organizer]  new event, roster carried over
 
 ── Participants ────────────────────────────────────────────────────
-POST   /v1/events/{public_id}/participants [join token] → 201 + participant_token
-GET    /v1/participants/me                 [participant token]
-PATCH  /v1/participants/me                 [participant token]   bumps participants_version
-DELETE /v1/participants/me                 [participant token]   soft cancel
-GET    /v1/events/{public_id}/participants [organizer]
+POST   /v1/events/{public_id}/participants [organizer | join token]
+         → 201; participant_token returned only to a joiner adding themselves
+GET    /v1/events/{public_id}/participants [organizer]  the roster
+GET    /v1/events/{id}/participants/{pid}  [organizer]
 PATCH  /v1/events/{id}/participants/{pid}  [organizer]  edit on someone's behalf
+DELETE /v1/events/{id}/participants/{pid}  [organizer]  soft cancel
+GET    /v1/participants/me                 [participant token]
+PATCH  /v1/participants/me                 [participant token]
+DELETE /v1/participants/me                 [participant token]   soft cancel
 
 ── Optimization ────────────────────────────────────────────────────
 POST   /v1/events/{public_id}/optimizations [organizer]
@@ -622,6 +625,17 @@ GET    /v1/events/{public_id}/solutions/{sid}/diff/{other} [organizer]
 ── Ops ─────────────────────────────────────────────────────────────
 GET    /healthz  /readyz  /metrics
 ```
+
+Creating a participant serves both principals: in Model A the organizer types the roster in, in
+Model B a joiner adds themselves (§2.1). One endpoint rather than two, because the row written is
+identical — only the caller's principal and whether a `participant_token` is handed back differ.
+
+Both the organizer and participant paths exist for cancelling for the same reason: the coordinator is
+usually who gets told that someone has dropped out.
+
+**Every roster mutation bumps `events.participants_version`** — insert, edit and cancel alike. The
+bump is an `UPDATE` of the event row, which is also what makes the participant cap race-free (§5.1),
+so it happens before the mutation rather than after it.
 
 ### 6.1 Authorization: three principals
 
