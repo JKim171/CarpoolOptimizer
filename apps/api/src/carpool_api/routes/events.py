@@ -21,6 +21,7 @@ from carpool_api.errors import violates
 from carpool_api.geo import latitude_of, longitude_of, point
 from carpool_api.models import Event, EventStatus, EventToken, TokenKind
 from carpool_api.schemas.events import (
+    WEIGHTS_KEY,
     Destination,
     EventCreate,
     EventCreated,
@@ -92,6 +93,9 @@ async def create_event(
             ends_at=payload.ends_at,
             timezone=payload.timezone,
             status=EventStatus.OPEN,
+            settings=(
+                {} if payload.weights is None else {WEIGHTS_KEY: payload.weights.model_dump()}
+            ),
             tokens=[
                 EventToken(
                     kind=TokenKind.ORGANIZER,
@@ -169,6 +173,10 @@ async def patch_event(
     if (destination := payload.destination) is not None:
         event.destination_address = destination.address
         event.destination_geog = point(destination.lat, destination.lng)
+    if (weights := payload.weights) is not None:
+        # Rebound rather than mutated in place: SQLAlchemy tracks JSONB columns by identity, so
+        # editing the existing dict would not mark the attribute dirty and the update would be lost.
+        event.settings = {**event.settings, WEIGHTS_KEY: weights.model_dump()}
     for field in ("name", "arrival_at", "ends_at", "timezone"):
         if field in changes:
             setattr(event, field, changes[field])

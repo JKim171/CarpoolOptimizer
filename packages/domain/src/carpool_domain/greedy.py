@@ -14,9 +14,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from .models import DESTINATION, ProblemInstance, Role, Route, Solution, outbound_schedule
+from .models import DESTINATION, ProblemInstance, Role, Route, Solution
 from .objective import route_metrics
 from .sequence import resequence
+from .validate import route_feasible
 
 #: Riders are only offered to the nearest few cars. Beyond that the insertion is never competitive,
 #: and considering every car makes construction quadratic in the size of the event.
@@ -32,29 +33,6 @@ def _route_cost(instance: ProblemInstance, route: Route) -> float:
         + w.passenger_ride_time * m.passenger_ride_seconds
         + w.driver_detour * m.detour_seconds
     )
-
-
-def _feasible(instance: ProblemInstance, route: Route) -> bool:
-    driver = instance.participant(route.driver_id)
-    if not driver.role.can_drive:
-        return False
-    m = route_metrics(instance, route)
-    if m.seats_used > driver.seats:
-        return False
-    if driver.max_detour_seconds is not None and m.detour_seconds > driver.max_detour_seconds:
-        return False
-    for passenger_id in route.passengers:
-        if instance.participant(passenger_id).pinned_driver_id not in (None, driver.id):
-            return False
-    pickups = outbound_schedule(instance, route)
-    for participant_id in (route.driver_id, *route.outbound):
-        participant = instance.participant(participant_id)
-        if (
-            participant.earliest_departure is not None
-            and pickups[participant_id] < participant.earliest_departure
-        ):
-            return False
-    return True
 
 
 def _positions(sequence: tuple[str, ...], rider: str) -> Iterator[tuple[str, ...]]:
@@ -79,7 +57,7 @@ def _best_insertion(
     for outbound in outbound_options:
         for inbound in inbound_options:
             candidate = Route(route.driver_id, outbound, inbound)
-            if not _feasible(instance, candidate):
+            if not route_feasible(instance, candidate):
                 continue
             delta = _route_cost(instance, candidate) - base
             if best is None or delta < best[1]:
@@ -141,7 +119,7 @@ def solve(
         # *plus that car's own round trip* -- charging only the former makes a new car look nearly
         # free and leaves every vehicle half empty.
         solo = Route(rider.id)
-        can_open = rider.role.can_drive and _feasible(instance, solo)
+        can_open = rider.role.can_drive and route_feasible(instance, solo)
         solo_cost = instance.weights.vehicle + _route_cost(instance, solo)
         if can_open and (best is None or best[2] > solo_cost):
             routes[rider.id] = solo
@@ -155,5 +133,5 @@ def solve(
         tidied = resequence(instance, route)
         # Resequencing minimizes drive plus ride time, which under a heavy ride weight can lengthen
         # the drive enough to break a detour cap. Keep the original ordering when that happens.
-        final.append(tidied if _feasible(instance, tidied) else route)
+        final.append(tidied if route_feasible(instance, tidied) else route)
     return Solution(routes=tuple(final), unassigned=tuple(unassigned))

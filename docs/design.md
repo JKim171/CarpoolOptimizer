@@ -610,10 +610,12 @@ DELETE /v1/participants/me                 [participant token]   soft cancel
 POST   /v1/events/{public_id}/optimizations [organizer]
          Idempotency-Key: <uuid>
          { algorithm?, weights?, preserve_previous?: bool }
-       → 202 {job_id, status}
-       → 409 {existing_job_id}   when one is already in flight
-GET    /v1/optimizations/{job_id}          → {status, progress, solution_id?, error?}
-DELETE /v1/optimizations/{job_id}          [organizer]  cooperative cancel
+       → 202 {job_id, status, …}   a job was created
+       → 200 same shape            an idempotent replay, or a fingerprint already solved
+       → 409 {existing_job_id}     when one is already in flight
+GET    /v1/events/{public_id}/optimizations/{job_id}
+                                           → {status, progress, solution_id?, error?}
+DELETE /v1/events/{public_id}/optimizations/{job_id} [organizer]  cooperative cancel
 
 ── Solutions ───────────────────────────────────────────────────────
 GET    /v1/events/{public_id}/solutions              [organizer]  history
@@ -629,6 +631,10 @@ GET    /healthz  /readyz  /metrics
 Creating a participant serves both principals: in Model A the organizer types the roster in, in
 Model B a joiner adds themselves (§2.1). One endpoint rather than two, because the row written is
 identical — only the caller's principal and whether a `participant_token` is handed back differ.
+
+**A job is addressed under its event, not at a bare `/v1/optimizations/{job_id}`.** Every token in
+this design is scoped to one event (§6.1), so the path has to name the event for authorization to be
+possible at all; a flat path would make the job id itself the credential.
 
 Both the organizer and participant paths exist for cancelling for the same reason: the coordinator is
 usually who gets told that someone has dropped out.
