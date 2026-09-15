@@ -15,7 +15,13 @@ from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 IMAGE = "carpool-postgres:16"
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
@@ -75,3 +81,28 @@ async def engine(migrated_url: str) -> AsyncIterator[AsyncEngine]:
         yield engine
     finally:
         await engine.dispose()
+
+
+@pytest.fixture
+async def api_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+    """The real app over ASGI, talking to the container.
+
+    `get_session` is overridden so requests use this test's engine rather than the process-wide one
+    built from `DATABASE_URL`; nothing else about the app is substituted, so routing, dependencies,
+    validation and serialization are all the production code paths.
+    """
+    from carpool_api.db import get_session
+    from carpool_api.main import create_app
+
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def override() -> AsyncIterator[AsyncSession]:
+        async with sessionmaker() as session:
+            yield session
+
+    app = create_app()
+    app.dependency_overrides[get_session] = override
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://carpool.test"
+    ) as client:
+        yield client

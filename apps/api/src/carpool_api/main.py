@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from carpool_api.db import dispose_engine
-from carpool_api.routes import ops
+from carpool_api.routes import events, ops
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(ops.router)
+    app.include_router(events.router)
     return app
 
 
