@@ -323,7 +323,7 @@ events (
   timezone             text not null,                 -- IANA
   status               event_status not null,         -- draft|open|locked|archived
   settings             jsonb not null default '{}',   -- objective weights, detour caps
-  template_event_id    uuid null references events(id),-- roster reuse / clone lineage
+  template_event_id    uuid null references events(id) on delete set null, -- clone lineage
   participants_version bigint not null default 0,     -- optimistic concurrency guard
   created_at           timestamptz not null default now(),
   check (ends_at > arrival_at)
@@ -349,7 +349,7 @@ participants (
   role               participant_role not null,   -- driver|passenger|either
   seats_available    int not null default 0 check (seats_available >= 0),
   priority           int not null default 0,      -- generic; scales the unassigned penalty (§2.2)
-  pinned_driver_id   uuid null references participants(id),  -- organizer override
+  pinned_driver_id   uuid null references participants(id) on delete set null, -- organizer override
   needs_outbound     boolean not null default true,
   needs_return       boolean not null default true,
   pickup_address     text not null,               -- ← the durable record (§5.2)
@@ -399,7 +399,7 @@ create index jobs_claimable on optimization_jobs (queued_at)
 solutions (
   id              uuid primary key,
   event_id        uuid not null references events(id) on delete cascade,
-  job_id          uuid not null references optimization_jobs(id),
+  job_id          uuid not null references optimization_jobs(id) on delete cascade,
   algorithm       text not null,
   objective_value double precision not null,
   metrics         jsonb not null,   -- drive_s, vehicles, p95_detour_s, churn, gap_to_bound
@@ -415,7 +415,7 @@ create unique index one_active_solution_per_event
 routes (
   id                    uuid primary key,
   solution_id           uuid not null references solutions(id) on delete cascade,
-  driver_participant_id uuid not null references participants(id),
+  driver_participant_id uuid not null references participants(id) on delete cascade,
   seats_used            int not null,
   total_distance_m      int not null,     -- both legs
   total_duration_s      int not null,     -- both legs
@@ -429,14 +429,14 @@ route_stops (
   route_id       uuid not null references routes(id) on delete cascade,
   leg            route_leg not null,  -- outbound|return; orders differ (§8.2)
   seq            int not null,
-  participant_id uuid not null references participants(id),
+  participant_id uuid not null references participants(id) on delete cascade,
   eta            timestamptz not null, -- pickup time outbound, drop-off time on return
   unique (route_id, leg, seq)
 );
 
 unassigned_participants (
   solution_id    uuid not null references solutions(id) on delete cascade,
-  participant_id uuid not null references participants(id),
+  participant_id uuid not null references participants(id) on delete cascade,
   reason         text not null,   -- no_capacity|detour_exceeded|time_window|no_drivers
   primary key (solution_id, participant_id)
 );
@@ -462,6 +462,16 @@ travel_cache (
   primary key (origin_cell, dest_cell, profile)
 );
 ```
+
+**Every foreign key carries a delete action, and the choice is not uniform.** `delete from events`
+has to remove an event and everything about it in one statement — that is the operation the retention
+and privacy launch gate requires (§5.3.2), and a retention job that has to delete child tables in the
+right order stops being complete the first time a table is added.
+
+References that express *ownership* cascade: a route with no driver, a stop with no passenger, or a
+solution with no record of the job that produced it are all meaningless. References that express a
+*relationship* set null instead: losing the driver you were pinned to must not delete you, and
+deleting a template must not delete the events cloned from it.
 
 ### 5.1 Three decisions worth defending
 

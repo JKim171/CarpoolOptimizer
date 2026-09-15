@@ -36,7 +36,12 @@ class Solution(Base):
 
     id: Mapped[UuidPk]
     event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
-    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("optimization_jobs.id"))
+    #: Cascades for the same reason as `event_id`: deleting an event deletes its jobs, and a
+    #: solution whose job is gone has lost the record of how it was produced. Not nullable, so
+    #: SET NULL is not an option.
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("optimization_jobs.id", ondelete="CASCADE")
+    )
     algorithm: Mapped[str] = mapped_column(Text)
     objective_value: Mapped[float] = mapped_column(Float)
     #: drive_s, vehicles, p95_detour_s, churn, gap_to_bound.
@@ -75,7 +80,13 @@ class Route(Base):
 
     id: Mapped[UuidPk]
     solution_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("solutions.id", ondelete="CASCADE"))
-    driver_participant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("participants.id"))
+    #: Cascades so that deleting an event can succeed: the event's participants go with it, and a
+    #: route without its driver is not a route. The API never hard-deletes an individual participant
+    #: -- cancelling is a status change (docs/design.md 5.3.1) -- so event deletion is the only path
+    #: this fires on.
+    driver_participant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participants.id", ondelete="CASCADE")
+    )
     seats_used: Mapped[int] = mapped_column(Integer)
     #: Both legs combined. Integer seconds and metres throughout (CLAUDE.md).
     total_distance_m: Mapped[int] = mapped_column(Integer)
@@ -113,7 +124,9 @@ class RouteStop(Base):
     #: (docs/design.md 8.2).
     leg: Mapped[RouteLeg] = mapped_column(pg_enum(RouteLeg, "route_leg"))
     seq: Mapped[int] = mapped_column(Integer)
-    participant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("participants.id"))
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participants.id", ondelete="CASCADE")
+    )
     #: Pickup time outbound, drop-off time on return.
     eta: Mapped[TimestampTz]
 
@@ -131,7 +144,7 @@ class UnassignedParticipant(Base):
         ForeignKey("solutions.id", ondelete="CASCADE"), primary_key=True
     )
     participant_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("participants.id"), primary_key=True
+        ForeignKey("participants.id", ondelete="CASCADE"), primary_key=True
     )
     #: no_capacity | detour_exceeded | time_window | no_drivers
     reason: Mapped[str] = mapped_column(Text)
