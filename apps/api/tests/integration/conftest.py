@@ -106,3 +106,29 @@ async def api_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
         transport=ASGITransport(app=app), base_url="http://carpool.test"
     ) as client:
         yield client
+
+
+@pytest.fixture
+async def organizer_event(api_client: AsyncClient) -> tuple[str, dict[str, str]]:
+    """An open event, and the headers that administer it.
+
+    For tests whose subject is something *on* an event rather than event creation itself; the event
+    endpoints keep their own payload builder, because varying its fields is what they test.
+    """
+    response = await api_client.post(
+        "/v1/events",
+        json={
+            "name": "Tuesday practice",
+            "destination": {
+                "address": "500 E Liberty St, Ann Arbor, MI",
+                "lat": 42.2808,
+                "lng": -83.7430,
+            },
+            "arrival_at": "2026-09-22T16:00:00-04:00",
+            "ends_at": "2026-09-22T18:00:00-04:00",
+            "timezone": "America/Detroit",
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    return body["event"]["public_id"], {"Authorization": f"Bearer {body['organizer_token']}"}

@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from carpool_api.db import dispose_engine
-from carpool_api.routes import events, ops
+from carpool_api.routes import events, ops, participants
 
 
 @asynccontextmanager
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(ops.router)
     app.include_router(events.router)
+    app.include_router(participants.router)
     return app
 
 
