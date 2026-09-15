@@ -47,8 +47,11 @@ class Event(Base):
     #: Objective weights and detour caps; shaped by the domain's ObjectiveWeights.
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     #: Clone lineage for roster reuse (docs/design.md 5.3.1).
+    #:
+    #: SET NULL: lineage is a pointer, not a dependency. Deleting a template must not delete the
+    #: events cloned from it, and with no action it could not be deleted at all.
     template_event_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("events.id"), nullable=True
+        ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
     #: Bumped on every participant insert/update/delete. Taking this row's lock is what makes both
     #: the 50-participant cap and stale-solution detection race-free (docs/design.md 5.1).

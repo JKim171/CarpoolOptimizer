@@ -55,8 +55,12 @@ class Participant(Base):
     #: priority stays out of the optimizer's structure (docs/design.md 2.2).
     priority: Mapped[int] = mapped_column(Integer, server_default="0")
     #: Organizer override: force this person into a particular car.
+    #:
+    #: SET NULL rather than CASCADE: losing the driver you were pinned to must not delete *you*.
+    #: It also has to be one or the other -- with no action, deleting an event whose roster contains
+    #: a pin fails, because the cascade cannot delete the pinned-to participant.
     pinned_driver_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("participants.id"), nullable=True
+        ForeignKey("participants.id", ondelete="SET NULL"), nullable=True
     )
     needs_outbound: Mapped[bool] = mapped_column(Boolean, server_default="true")
     needs_return: Mapped[bool] = mapped_column(Boolean, server_default="true")
