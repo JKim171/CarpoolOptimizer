@@ -49,6 +49,12 @@ class Solution(Base):
     routes: Mapped[list[Route]] = relationship(
         back_populates="solution", cascade="all, delete-orphan"
     )
+    #: A relationship rather than rows inserted separately, so a solution and the reasons somebody
+    #: went without a ride commit as one graph. Relationships are mapper-level, not DDL -- this adds
+    #: no migration.
+    unassigned: Mapped[list[UnassignedParticipant]] = relationship(
+        back_populates="solution", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         #: One active solution per event, enforced by the database for the same reason as
@@ -129,3 +135,5 @@ class UnassignedParticipant(Base):
     )
     #: no_capacity | detour_exceeded | time_window | no_drivers
     reason: Mapped[str] = mapped_column(Text)
+
+    solution: Mapped[Solution] = relationship(back_populates="unassigned")

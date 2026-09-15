@@ -5,6 +5,7 @@ by the worker, and by the benchmark harness.
 """
 
 from . import greedy
+from .explain import unassigned_reason
 from .generate import DEFAULT_DESTINATION, Distribution, generate_instance
 from .models import (
     DESTINATION,
@@ -26,12 +27,13 @@ from .models import (
 )
 from .objective import ObjectiveBreakdown, RouteMetrics, churn, evaluate, route_metrics
 from .sequence import MAX_EXACT_STOPS, resequence, sequence_inbound, sequence_outbound
-from .validate import Violation, validate
+from .validate import Constraint, Violation, route_feasible, validate, violated_constraints
 
 __all__ = [
     "DEFAULT_DESTINATION",
     "DESTINATION",
     "MAX_EXACT_STOPS",
+    "Constraint",
     "Distribution",
     "Location",
     "NodeId",
@@ -54,10 +56,13 @@ __all__ = [
     "inbound_schedule",
     "outbound_schedule",
     "resequence",
+    "route_feasible",
     "route_metrics",
     "schedule_backward",
     "schedule_forward",
     "sequence_inbound",
     "sequence_outbound",
+    "unassigned_reason",
     "validate",
+    "violated_constraints",
 ]

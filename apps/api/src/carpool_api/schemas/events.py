@@ -16,9 +16,20 @@ from zoneinfo import ZoneInfo, available_timezones
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from carpool_api.models import Event, EventStatus
+from carpool_api.schemas.weights import Weights
 
 NAME_MAX = 200
 ADDRESS_MAX = 500
+
+#: Key under which objective weights live in `events.settings` (docs/design.md 8.1). The column is
+#: JSONB rather than six numeric columns because the objective's shape is expected to grow -- a
+#: maximum ride time is already a named future term (docs/design.md 8.2).
+WEIGHTS_KEY = "weights"
+
+
+def weights_of(event: Event) -> Weights:
+    """The event's weights, defaulting field by field to the solver's own baseline."""
+    return Weights.model_validate(event.settings.get(WEIGHTS_KEY) or {})
 
 
 def _known_timezone(value: str) -> str:
@@ -61,6 +72,8 @@ class EventCreate(BaseModel):
     #: When the event ends and the return leg departs; drop-offs schedule forward from it.
     ends_at: AwareDatetime
     timezone: str
+    #: Omitted means the solver's defaults, which is what almost every event wants.
+    weights: Weights | None = None
 
     _check_timezone = field_validator("timezone")(_known_timezone)
 
@@ -88,6 +101,9 @@ class EventPatch(BaseModel):
     arrival_at: AwareDatetime | None = None
     ends_at: AwareDatetime | None = None
     timezone: str | None = None
+    #: Replaces the stored weights wholesale rather than merging field by field: a half-updated
+    #: objective is not a thing an organizer can reason about.
+    weights: Weights | None = None
 
     _check_timezone = field_validator("timezone")(_known_timezone)
 
@@ -116,6 +132,9 @@ class EventOrganizerRead(BaseModel):
     ends_at: datetime
     timezone: str
     status: EventStatus
+    #: Always present on the way out, defaults filled in, so a client never has to know what the
+    #: solver's baseline is in order to display or edit them.
+    weights: Weights
     #: Bumped by every roster change. An organizer client holds it to detect that a solution it is
     #: looking at has gone stale (docs/design.md 5.1).
     participants_version: int
@@ -133,6 +152,7 @@ class EventOrganizerRead(BaseModel):
             ends_at=event.ends_at,
             timezone=event.timezone,
             status=event.status,
+            weights=weights_of(event),
             participants_version=event.participants_version,
             created_at=event.created_at,
         )

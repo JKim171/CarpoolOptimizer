@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from enum import Enum
 
-from .models import ProblemInstance, Solution, outbound_schedule
+from .models import ProblemInstance, Route, Solution, outbound_schedule
 from .objective import route_metrics
 
 
@@ -20,6 +21,91 @@ class Violation:
     detail: str
     participant_id: str | None = None
     driver_id: str | None = None
+
+
+class Constraint(str, Enum):
+    """The classes of rule a single route can break.
+
+    Named as a closed set so that "why is this route infeasible" and "why could nobody take this
+    rider" are answerable in the same vocabulary. `explain.unassigned_reason` reports one of these,
+    and the storage layer maps it to its own column vocabulary -- the domain does not know what
+    string a database column expects.
+    """
+
+    #: The nominated driver is a passenger.
+    ROLE = "role"
+    #: More riders than the driver has seats.
+    SEATS = "seats"
+    #: The route exceeds the driver's own detour cap.
+    DETOUR = "detour"
+    #: A pickup falls before someone's `earliest_departure`.
+    TIME = "time"
+    #: A rider is pinned to a different driver.
+    PIN = "pin"
+
+
+def violated_constraints(
+    instance: ProblemInstance,
+    route: Route,
+    *,
+    ignore: frozenset[Constraint] = frozenset(),
+) -> frozenset[Constraint]:
+    """Which classes of rule `route` breaks, ignoring the ones named.
+
+    `ignore` is what makes a *diagnosis* possible rather than just a verdict: relaxing one class
+    at a time and re-asking shows which rule is actually binding, which is what an organizer needs
+    to be told (docs/design.md, `unassigned_participants.reason`).
+    """
+    driver = instance.participant(route.driver_id)
+    broken: set[Constraint] = set()
+
+    if Constraint.ROLE not in ignore and not driver.role.can_drive:
+        broken.add(Constraint.ROLE)
+
+    metrics = route_metrics(instance, route)
+    if Constraint.SEATS not in ignore and metrics.seats_used > driver.seats:
+        broken.add(Constraint.SEATS)
+    if (
+        Constraint.DETOUR not in ignore
+        and driver.max_detour_seconds is not None
+        and metrics.detour_seconds > driver.max_detour_seconds
+    ):
+        broken.add(Constraint.DETOUR)
+
+    if Constraint.PIN not in ignore:
+        for passenger_id in route.passengers:
+            if instance.participant(passenger_id).pinned_driver_id not in (None, driver.id):
+                broken.add(Constraint.PIN)
+                break
+
+    if Constraint.TIME not in ignore:
+        pickups = outbound_schedule(instance, route)
+        for participant_id in (route.driver_id, *route.outbound):
+            participant = instance.participant(participant_id)
+            if (
+                participant.earliest_departure is not None
+                and pickups[participant_id] < participant.earliest_departure
+            ):
+                broken.add(Constraint.TIME)
+                break
+
+    return frozenset(broken)
+
+
+def route_feasible(
+    instance: ProblemInstance,
+    route: Route,
+    *,
+    ignore: frozenset[Constraint] = frozenset(),
+) -> bool:
+    """Whether one route is legal on its own.
+
+    This is the single definition of per-route feasibility, used by the solvers while they search.
+    `validate` below answers a different question -- whether a whole `Solution` is coherent, with a
+    reportable message per problem -- and covers rules a single route cannot express, such as a
+    participant assigned twice or left out entirely.
+    """
+    return not violated_constraints(instance, route, ignore=ignore)
 
 
 def validate(instance: ProblemInstance, solution: Solution) -> list[Violation]:
