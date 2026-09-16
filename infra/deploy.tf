@@ -6,9 +6,20 @@
 # public (design §10.1).
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+
+  # Empty because AWS trusts this endpoint natively and no longer verifies
+  # thumbprints for it. AWS then populates one of its own, which Terraform would
+  # otherwise propose removing on every single plan from now on — and a
+  # configuration that always shows a diff is one where real drift goes unread.
+  # Hardcoding the current value instead is the trap old tutorials fall into:
+  # thumbprints rotate, and a stale one breaks deploys.
   thumbprint_list = []
+
+  lifecycle {
+    ignore_changes = [thumbprint_list]
+  }
 }
 
 # The trust policy is the security boundary, and the `sub` condition is the

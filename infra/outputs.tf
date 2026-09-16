@@ -33,6 +33,14 @@ output "deploy_document_name" {
   value       = aws_ssm_document.deploy.name
 }
 
+output "alerts_topic_arn" {
+  description = <<-EOT
+    Alarm destination. Nothing is subscribed by Terraform: subscribe an address
+    by hand so it never enters this public repository, then confirm the email.
+  EOT
+  value       = aws_sns_topic.alerts.arn
+}
+
 output "ami_id" {
   description = <<-EOT
     The AMI actually in use. Worth an output because aws_instance.ami is

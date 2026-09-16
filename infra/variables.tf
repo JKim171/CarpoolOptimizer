@@ -48,6 +48,16 @@ variable "swap_size_mb" {
   default     = 2048
 }
 
+variable "cpu_credit_alarm_threshold" {
+  description = <<-EOT
+    Warn below this many CPU credits. A t4g.small accrues 24/hour and caps at
+    576, so 50 is roughly two hours of accrual left - early enough to look at
+    what is burning them before the box throttles to baseline.
+  EOT
+  type        = number
+  default     = 50
+}
+
 variable "github_repository" {
   description = <<-EOT
     owner/repo exactly as GitHub spells it, including case. This is half of the
