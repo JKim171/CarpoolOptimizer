@@ -48,6 +48,32 @@ variable "swap_size_mb" {
   default     = 2048
 }
 
+variable "github_repository" {
+  description = <<-EOT
+    owner/repo exactly as GitHub spells it, including case. This is half of the
+    OIDC trust boundary: it is what stops any other repository's workflow from
+    assuming the deploy role.
+  EOT
+  type        = string
+  default     = "JKim171/CarpoolOptimizer"
+}
+
+variable "deploy_branch" {
+  description = <<-EOT
+    The only branch whose workflows may deploy. Scoping the OIDC subject to a
+    branch means a pull request from a fork - workflow code a stranger wrote -
+    gets a token that does not match and cannot deploy.
+  EOT
+  type        = string
+  default     = "main"
+}
+
+variable "app_dir" {
+  description = "Where the compose project lives on the instance."
+  type        = string
+  default     = "/opt/carpool"
+}
+
 variable "backup_retention_days" {
   description = <<-EOT
     How far back a restore can reach. Dumps are KB-to-low-MB, so this is a

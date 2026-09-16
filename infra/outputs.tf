@@ -23,6 +23,16 @@ output "backup_bucket" {
   value       = aws_s3_bucket.backups.bucket
 }
 
+output "deploy_role_arn" {
+  description = "Role the GitHub Actions workflow assumes via OIDC. Not a secret; it is an ARN."
+  value       = aws_iam_role.deploy.arn
+}
+
+output "deploy_document_name" {
+  description = "The only SSM document the deploy role may send."
+  value       = aws_ssm_document.deploy.name
+}
+
 output "ami_id" {
   description = <<-EOT
     The AMI actually in use. Worth an output because aws_instance.ami is
