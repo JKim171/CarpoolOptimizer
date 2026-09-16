@@ -32,3 +32,43 @@ resource "aws_iam_instance_profile" "instance" {
   name = "carpool-instance"
   role = aws_iam_role.instance.name
 }
+
+# Backups: write and read, but NOT delete.
+#
+# This is the whole point of the instance having a role rather than a stored key,
+# and the permission set is deliberately asymmetric. If the box is compromised,
+# the attacker already has the live database — reading the backups tells them
+# nothing new. What they must not be able to do is destroy the only off-machine
+# copy, so s3:DeleteObject and s3:DeleteObjectVersion are withheld, and bucket
+# versioning (backups.tf) means even an overwrite leaves the older object intact.
+#
+# Retention still happens: the bucket's own lifecycle rule expires old dumps,
+# and a lifecycle rule is evaluated by S3 itself, so it works without granting
+# anyone delete rights and a compromised instance cannot switch it off.
+resource "aws_iam_role_policy" "backups" {
+  name = "carpool-backups-write"
+  role = aws_iam_role.instance.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:AbortMultipartUpload",
+        ]
+        Resource = "${aws_s3_bucket.backups.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+        ]
+        Resource = aws_s3_bucket.backups.arn
+      },
+    ]
+  })
+}

@@ -48,6 +48,16 @@ variable "swap_size_mb" {
   default     = 2048
 }
 
+variable "backup_retention_days" {
+  description = <<-EOT
+    How far back a restore can reach. Dumps are KB-to-low-MB, so this is a
+    recoverability decision rather than a cost one: the window has to outlast
+    the time it might take to notice a corruption that happened quietly.
+  EOT
+  type        = number
+  default     = 90
+}
+
 variable "compose_version" {
   description = "Pinned Docker Compose CLI plugin release tag, fetched at first boot."
   type        = string

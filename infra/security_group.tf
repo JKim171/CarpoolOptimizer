@@ -16,11 +16,11 @@ resource "aws_vpc_security_group_ingress_rule" "http" {
   security_group_id = aws_security_group.app.id
   # AWS restricts rule descriptions to a-zA-Z0-9 and a fixed punctuation set;
   # an em dash here fails the apply with InvalidParameterValue.
-  description       = "HTTP: Caddy redirects to HTTPS and serves ACME challenges"
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = 80
-  to_port           = 80
-  ip_protocol       = "tcp"
+  description = "HTTP: Caddy redirects to HTTPS and serves ACME challenges"
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 80
+  to_port     = 80
+  ip_protocol = "tcp"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "https" {

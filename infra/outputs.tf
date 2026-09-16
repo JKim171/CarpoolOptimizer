@@ -18,6 +18,11 @@ output "public_ip" {
   value       = aws_eip.app.public_ip
 }
 
+output "backup_bucket" {
+  description = "Nightly pg_dump destination. The only off-machine copy of the database."
+  value       = aws_s3_bucket.backups.bucket
+}
+
 output "ami_id" {
   description = <<-EOT
     The AMI actually in use. Worth an output because aws_instance.ami is
