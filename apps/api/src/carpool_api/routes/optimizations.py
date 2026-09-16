@@ -23,12 +23,12 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,6 +56,41 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 _IN_FLIGHT = (JobStatus.QUEUED, JobStatus.RUNNING)
 _IN_FLIGHT_INDEX = "one_active_job_per_event"
+
+#: Visibility timeout. Comfortably longer than any solve this box will run -- greedy on the 50-seat
+#: cap is seconds -- because expiring a lease early on a job that is still working would let a
+#: second solve start alongside the first.
+LEASE_SECONDS = 300
+
+
+async def _reclaim_expired_leases(session: AsyncSession, event_id: uuid.UUID) -> None:
+    """Fail in-flight jobs whose lease has run out, so a crash cannot wedge an event forever.
+
+    Without this, a process that dies mid-solve -- OOM on a 2 GB box, a deploy restart, a container
+    restart -- leaves `status = running` with nothing left to finish it. `one_active_job_per_event`
+    then answers `409` to *every* future optimization of that event, permanently, with no recovery
+    path short of editing the database by hand.
+
+    Every in-flight job carries a lease from the moment it is inserted, not from the moment it
+    starts running, so the brief `queued` window is covered too.
+
+    This runs in the caller's transaction and before the insert, so the rows it fails have already
+    left the partial unique index by the time the new job is added.
+    """
+    await session.execute(
+        update(OptimizationJob)
+        .where(
+            OptimizationJob.event_id == event_id,
+            OptimizationJob.status.in_(_IN_FLIGHT),
+            OptimizationJob.lease_expires_at.is_not(None),
+            OptimizationJob.lease_expires_at < datetime.now(UTC),
+        )
+        .values(
+            status=JobStatus.FAILED,
+            error="lease expired; the process running this job did not finish",
+            finished_at=datetime.now(UTC),
+        )
+    )
 
 
 async def _destination(session: AsyncSession, event: Event) -> Location:
@@ -155,6 +190,10 @@ async def create_optimization(
         response.status_code = status.HTTP_200_OK
         return await _read(session, solved, public_id)
 
+    # Before the insert, not after a 409: a wedged event has to heal on the next attempt rather
+    # than stay wedged until someone notices.
+    await _reclaim_expired_leases(session, event_id)
+
     job = OptimizationJob(
         event_id=event_id,
         status=JobStatus.QUEUED,
@@ -163,6 +202,8 @@ async def create_optimization(
         input_fingerprint=fingerprint,
         input_version=input_version,
         idempotency_key=idempotency_key,
+        # Leased from insertion, so the queued window is covered as well as the running one.
+        lease_expires_at=datetime.now(UTC) + timedelta(seconds=LEASE_SECONDS),
     )
     try:
         # A savepoint, not the whole transaction: a conflict has to leave the session usable, so
@@ -210,6 +251,9 @@ async def _run(session: AsyncSession, event: Event, job: OptimizationJob) -> Non
     job.status = JobStatus.RUNNING
     job.started_at = datetime.now(UTC)
     job.attempt += 1
+    # Extended from the start of the solve rather than from insertion, so the timeout measures the
+    # work rather than the queueing.
+    job.lease_expires_at = datetime.now(UTC) + timedelta(seconds=LEASE_SECONDS)
     await session.commit()
 
     try:

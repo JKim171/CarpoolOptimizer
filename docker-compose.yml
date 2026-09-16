@@ -6,7 +6,11 @@ services:
       POSTGRES_USER: carpool
       POSTGRES_PASSWORD: carpool
       POSTGRES_DB: carpool
-    ports: ["5432:5432"]
+    # Explicitly 127.0.0.1. A bare "5432:5432" binds 0.0.0.0 AND [::], which puts a superuser
+    # whose password is published in a public repository on every network the laptop joins.
+    # Docker also writes its own forwarding rules, so the host firewall does not save you.
+    # The production compose file publishes no database port at all.
+    ports: ["127.0.0.1:5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U carpool"]

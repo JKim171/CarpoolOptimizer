@@ -22,26 +22,38 @@ from carpool_domain import ObjectiveWeights
 
 _DEFAULTS = ObjectiveWeights()
 
+#: Generous ceiling, ~1000x the largest default (`unassigned`), so it constrains nothing an
+#: organizer would ever mean while keeping the objective in a range where sums cannot overflow to
+#: `inf`. Without it, a merely *large* finite weight reaches the same place `inf` does.
+MAX_WEIGHT = 1e9
+
 
 class Weights(BaseModel):
-    """All non-negative: a negative weight would pay the objective to do the thing it names."""
+    """All non-negative: a negative weight would pay the objective to do the thing it names.
 
-    model_config = ConfigDict(extra="forbid")
+    **All finite, too.** `json.loads` accepts the non-standard `Infinity` and `NaN` tokens, and a
+    bare `float` field takes them, so `allow_inf_nan=False` is what keeps them out. It is not
+    hypothetical tidiness: `inf` survived validation, reached `json.dumps`, and came back out as a
+    bare `Infinity` token that PostgreSQL's JSONB rejects -- a 500 on an endpoint reachable without
+    authentication. `inf * 0` would also make the objective `NaN` if one ever reached the solver.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     #: Total driving, both legs.
-    drive_time: float = Field(default=_DEFAULTS.drive_time, ge=0)
+    drive_time: float = Field(default=_DEFAULTS.drive_time, ge=0, le=MAX_WEIGHT)
     #: Charged once per car. Only bites when someone can choose whether to drive, which today means
     #: a roster using `either` (CLAUDE.md).
-    vehicle: float = Field(default=_DEFAULTS.vehicle, ge=0)
+    vehicle: float = Field(default=_DEFAULTS.vehicle, ge=0, le=MAX_WEIGHT)
     #: Passenger time in the car, summed. A utilitarian total, which by construction cannot see how
     #: unevenly that time is distributed (docs/design.md 8.2).
-    passenger_ride_time: float = Field(default=_DEFAULTS.passenger_ride_time, ge=0)
+    passenger_ride_time: float = Field(default=_DEFAULTS.passenger_ride_time, ge=0, le=MAX_WEIGHT)
     #: A driver's excess over their own direct round trip.
-    driver_detour: float = Field(default=_DEFAULTS.driver_detour, ge=0)
+    driver_detour: float = Field(default=_DEFAULTS.driver_detour, ge=0, le=MAX_WEIGHT)
     #: Large by design: leaving somebody without a ride must lose to almost any amount of driving.
-    unassigned: float = Field(default=_DEFAULTS.unassigned, ge=0)
+    unassigned: float = Field(default=_DEFAULTS.unassigned, ge=0, le=MAX_WEIGHT)
     #: Re-optimization only, and inert until a solver can steer by it (docs/design.md 8.4).
-    churn: float = Field(default=_DEFAULTS.churn, ge=0)
+    churn: float = Field(default=_DEFAULTS.churn, ge=0, le=MAX_WEIGHT)
 
     def to_domain(self) -> ObjectiveWeights:
         return ObjectiveWeights(**self.model_dump())

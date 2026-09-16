@@ -444,3 +444,147 @@ async def test_a_cancelled_participant_is_left_out_of_the_solve(
     absent = roster["north"]["id"]
     assert absent not in {str(p) for p in routed}
     assert absent not in {str(p) for p in unassigned}
+
+
+async def test_an_expired_lease_is_reclaimed_so_the_event_is_not_wedged(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], engine: AsyncEngine
+) -> None:
+    """A crash mid-solve must not block the event from ever being optimized again.
+
+    The failure this pins is not theoretical: the in-request executor commits `running` before
+    solving, so a process that dies there -- OOM on a 2 GB box, a deploy restart -- leaves a row
+    that `one_active_job_per_event` treats as in flight forever, and every later optimize of that
+    event answers 409 with no recovery path short of editing the database.
+
+    Simulated by backdating the lease rather than by killing a process, which is the same state.
+    """
+    public_id, headers = organizer_event
+    await seed_roster(api_client, organizer_event)
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "insert into optimization_jobs"
+                " (id, event_id, status, algorithm, params, input_fingerprint, input_version,"
+                "  lease_expires_at, queued_at, started_at)"
+                " select gen_random_uuid(), e.id, 'running', 'greedy', '{}'::jsonb,"
+                " '\\x00'::bytea, 0,"
+                " now() - interval '1 hour', now() - interval '2 hours',"
+                " now() - interval '2 hours'"
+                " from events e where e.public_id = :p"
+            ),
+            {"p": public_id},
+        )
+
+    # Without reclamation this is a 409.
+    job = await optimize(api_client, organizer_event)
+    assert job["status"] == "succeeded"
+
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    "select j.status, j.error from optimization_jobs j"
+                    " join events e on e.id = j.event_id where e.public_id = :p"
+                    " order by j.queued_at"
+                ),
+                {"p": public_id},
+            )
+        ).all()
+
+    assert [row[0] for row in rows] == ["failed", "succeeded"]
+    assert "lease expired" in rows[0][1]
+
+
+async def test_a_live_lease_still_blocks_a_second_job(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], engine: AsyncEngine
+) -> None:
+    """The reclaim must not become a way around `one_active_job_per_event`.
+
+    A lease that has NOT expired belongs to something that may still be working, so failing it
+    would let two solves run against one event at once -- the exact race the partial unique index
+    exists to prevent.
+    """
+    public_id, headers = organizer_event
+    await seed_roster(api_client, organizer_event)
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "insert into optimization_jobs"
+                " (id, event_id, status, algorithm, params, input_fingerprint, input_version,"
+                "  lease_expires_at)"
+                " select gen_random_uuid(), e.id, 'running', 'greedy', '{}'::jsonb,"
+                " '\\x00'::bytea, 0,"
+                " now() + interval '5 minutes'"
+                " from events e where e.public_id = :p"
+            ),
+            {"p": public_id},
+        )
+
+    response = await api_client.post(
+        f"/v1/events/{public_id}/optimizations", headers=headers, json={}
+    )
+    assert response.status_code == 409
+
+
+async def test_a_new_job_carries_a_lease(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], engine: AsyncEngine
+) -> None:
+    """Leased from insertion rather than from the start of the solve.
+
+    The `queued` window is brief but real, and a process that dies inside it would otherwise leave
+    a job with no lease for the reclaim to find.
+    """
+    public_id, _ = organizer_event
+    await seed_roster(api_client, organizer_event)
+    await optimize(api_client, organizer_event)
+
+    async with engine.connect() as conn:
+        lease = (
+            await conn.execute(
+                text(
+                    "select j.lease_expires_at from optimization_jobs j"
+                    " join events e on e.id = j.event_id where e.public_id = :p"
+                ),
+                {"p": public_id},
+            )
+        ).scalar_one()
+
+    assert lease is not None
+
+
+async def test_non_finite_weights_are_rejected(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    """`json.loads` accepts `Infinity` and `NaN`; a bare float field would too.
+
+    An `inf` weight used to pass validation and then fail on the JSONB write, turning a bad request
+    into a 500. `NaN` was already rejected by `ge=0` -- only because comparisons against NaN are
+    false, which is luck rather than a rule -- so both are pinned here.
+    """
+    public_id, headers = organizer_event
+    await seed_roster(api_client, organizer_event)
+
+    for token in ("Infinity", "-Infinity", "NaN"):
+        response = await api_client.post(
+            f"/v1/events/{public_id}/optimizations",
+            headers={**headers, "content-type": "application/json"},
+            content=f'{{"weights": {{"drive_time": {token}}}}}',
+        )
+        assert response.status_code == 422, (token, response.status_code)
+
+
+async def test_an_absurdly_large_weight_is_rejected(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    """A merely large finite weight reaches the same place `inf` does, via overflow in a sum."""
+    public_id, headers = organizer_event
+    await seed_roster(api_client, organizer_event)
+
+    response = await api_client.post(
+        f"/v1/events/{public_id}/optimizations",
+        headers=headers,
+        json={"weights": {"drive_time": 1e300}},
+    )
+    assert response.status_code == 422

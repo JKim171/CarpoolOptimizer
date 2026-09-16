@@ -21,8 +21,13 @@ credential.
 - Commit an `.env.example` with **placeholder** values when documenting a new variable.
 - Real values in CI come from GitHub Actions secrets; in production from the host's environment.
 - Local development credentials in `docker-compose.yml` (e.g. `POSTGRES_PASSWORD: carpool`) are
-  deliberate throwaways for a container bound to localhost. Never reuse that pattern for anything
-  reachable from outside the machine.
+  deliberate throwaways, and they are only acceptable because the port is published to
+  **`127.0.0.1` explicitly**. That binding is what makes the rest of this bullet true, so it is
+  load-bearing, not cosmetic: a bare `5432:5432` binds `0.0.0.0` and `[::]` and puts a Postgres
+  **superuser**, whose password is published in this public repository, on every network the
+  machine joins. Docker publishes ports through its own forwarding rules, which bypass the host
+  firewall. Never reuse that pattern for anything reachable from outside the machine, and never
+  drop the `127.0.0.1:` prefix from a published port.
 
 - Terraform state (`*.tfstate*`, `.terraform/`) is never committed — it can hold secrets in plain
   text. It lives in the S3 backend.
