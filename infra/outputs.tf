@@ -7,3 +7,22 @@ output "public_subnet_id" {
   description = "The one public subnet the instance will launch into."
   value       = aws_subnet.public.id
 }
+
+output "instance_id" {
+  description = "Instance id — the argument to `aws ssm start-session --target`."
+  value       = aws_instance.app.id
+}
+
+output "public_ip" {
+  description = "Stable Elastic IP. This is what an A record will eventually point at."
+  value       = aws_eip.app.public_ip
+}
+
+output "ami_id" {
+  description = <<-EOT
+    The AMI actually in use. Worth an output because aws_instance.ami is
+    lifecycle-ignored, so this is the only convenient way to see how far behind
+    the current AL2023 image the running box has drifted.
+  EOT
+  value       = aws_instance.app.ami
+}

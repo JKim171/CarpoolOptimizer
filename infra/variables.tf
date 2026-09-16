@@ -25,3 +25,31 @@ variable "public_subnet_cidr" {
   type        = string
   default     = "10.0.1.0/24"
 }
+
+variable "instance_type" {
+  description = <<-EOT
+    Graviton/arm64, matching the Apple Silicon dev machine so images run natively
+    in both places. Burstable suits a box that is idle almost always and solves
+    in bursts of seconds. ~$12.26/month on-demand in us-east-1.
+  EOT
+  type        = string
+  default     = "t4g.small"
+}
+
+variable "root_volume_gb" {
+  description = "Root EBS volume in GB. 20 GB gp3 is ~$1.60/month (design §10.1)."
+  type        = number
+  default     = 20
+}
+
+variable "swap_size_mb" {
+  description = "Swap file size. 2 GB against 2 GB of RAM, as the margin design §10.1 calls for."
+  type        = number
+  default     = 2048
+}
+
+variable "compose_version" {
+  description = "Pinned Docker Compose CLI plugin release tag, fetched at first boot."
+  type        = string
+  default     = "v5.5.1"
+}
