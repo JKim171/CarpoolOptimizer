@@ -1,0 +1,2361 @@
+{
+  "components": {
+    "schemas": {
+      "Destination": {
+        "additionalProperties": false,
+        "description": "Where the event is. Latitude first, as in every payload this API accepts.",
+        "properties": {
+          "address": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Address",
+            "type": "string"
+          },
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lng",
+            "type": "number"
+          }
+        },
+        "required": [
+          "address",
+          "lat",
+          "lng"
+        ],
+        "title": "Destination",
+        "type": "object"
+      },
+      "EventCreate": {
+        "additionalProperties": false,
+        "description": "`extra=\"forbid\"` throughout: a misspelled field is a bug, and silently ignoring it is worse\nthan a 422 -- an event created with a mistyped `ends_at` looks like it worked.",
+        "properties": {
+          "arrival_at": {
+            "format": "date-time",
+            "title": "Arrival At",
+            "type": "string"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/Destination"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Weights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "destination",
+          "arrival_at",
+          "ends_at",
+          "timezone"
+        ],
+        "title": "EventCreate",
+        "type": "object"
+      },
+      "EventCreated": {
+        "description": "The one and only time the organizer token is visible.\n\nOnly its SHA-256 digest is stored, so a lost token cannot be recovered -- it can only be\nreissued. There is deliberately no `join_url` yet: minting a join token while no endpoint\naccepts one would hand the caller a link that silently does nothing (docs/roadmap.md, Week 2).",
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/EventOrganizerRead"
+          },
+          "organizer_token": {
+            "title": "Organizer Token",
+            "type": "string"
+          },
+          "organizer_token_expires_at": {
+            "format": "date-time",
+            "title": "Organizer Token Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "organizer_token",
+          "organizer_token_expires_at"
+        ],
+        "title": "EventCreated",
+        "type": "object"
+      },
+      "EventOrganizerRead": {
+        "description": "The organizer's view of an event.\n\nThe participant and joiner views are separate classes, added with the join flow. This one is\nunredacted; being explicit about that is the point of having one model per audience.",
+        "properties": {
+          "arrival_at": {
+            "format": "date-time",
+            "title": "Arrival At",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/Destination"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "participants_version": {
+            "title": "Participants Version",
+            "type": "integer"
+          },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EventStatus"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "weights": {
+            "$ref": "#/components/schemas/Weights"
+          }
+        },
+        "required": [
+          "public_id",
+          "name",
+          "destination",
+          "arrival_at",
+          "ends_at",
+          "timezone",
+          "status",
+          "weights",
+          "participants_version",
+          "created_at"
+        ],
+        "title": "EventOrganizerRead",
+        "type": "object"
+      },
+      "EventPatch": {
+        "additionalProperties": false,
+        "description": "Every field optional; only those actually sent are applied (`exclude_unset`).\n\nThe destination moves as a unit -- an address without its coordinates would leave the two\ndescribing different places, and there is no geocoder yet to re-derive one from the other.\nThat is why `destination` is a nested object here rather than three sibling fields.",
+        "properties": {
+          "arrival_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival At"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Destination"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Weights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "EventPatch",
+        "type": "object"
+      },
+      "EventStatus": {
+        "enum": [
+          "draft",
+          "open",
+          "locked",
+          "archived"
+        ],
+        "title": "EventStatus",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "JobConflict": {
+        "description": "The 409 body when a job is already in flight for this event.\n\nCarries the existing job id so the client polls that one instead of retrying -- a retry would\nhit the same partial unique index and fail again (docs/design.md 5.1).",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "existing_job_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Job Id"
+          }
+        },
+        "required": [
+          "detail",
+          "existing_job_id"
+        ],
+        "title": "JobConflict",
+        "type": "object"
+      },
+      "JobRead": {
+        "description": "A job as the client polls it (docs/design.md 4.3 -- polling, not SSE, in v1).",
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "cancel_requested": {
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "event_public_id": {
+            "title": "Event Public Id",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "input_version": {
+            "title": "Input Version",
+            "type": "integer"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "title": "Queued At",
+            "type": "string"
+          },
+          "solution_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solution Id"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "weights": {
+            "$ref": "#/components/schemas/Weights"
+          }
+        },
+        "required": [
+          "job_id",
+          "event_public_id",
+          "status",
+          "algorithm",
+          "weights",
+          "input_version",
+          "progress",
+          "error",
+          "solution_id",
+          "cancel_requested",
+          "queued_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "JobRead",
+        "type": "object"
+      },
+      "JobStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "LegRead": {
+        "description": "One leg of one car. The legs carry different orderings on purpose (docs/design.md 8.2).",
+        "properties": {
+          "leg": {
+            "$ref": "#/components/schemas/RouteLeg"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/StopRead"
+            },
+            "title": "Stops",
+            "type": "array"
+          }
+        },
+        "required": [
+          "leg",
+          "stops"
+        ],
+        "title": "LegRead",
+        "type": "object"
+      },
+      "OptimizationCreate": {
+        "additionalProperties": false,
+        "description": "What to solve and how.\n\nNo `preserve_previous` yet, though docs/design.md 6 lists one: it would set the churn weight\nagainst the previously activated solution, and greedy cannot steer by churn: it constructs\nfrom nothing. The flag arrives with LNS, whose acceptance criterion can actually honour it\n(docs/design.md 8.4). Offering it now would be a switch that silently does nothing.",
+        "properties": {
+          "algorithm": {
+            "const": "greedy",
+            "default": "greedy",
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Weights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "OptimizationCreate",
+        "type": "object"
+      },
+      "ParticipantCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "earliest_departure": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliest Departure"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "latest_arrival": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Arrival"
+          },
+          "max_detour_minutes": {
+            "anyOf": [
+              {
+                "maximum": 240.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Detour Minutes"
+          },
+          "needs_outbound": {
+            "default": true,
+            "title": "Needs Outbound",
+            "type": "boolean"
+          },
+          "needs_return": {
+            "default": true,
+            "title": "Needs Return",
+            "type": "boolean"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "pickup": {
+            "$ref": "#/components/schemas/Pickup"
+          },
+          "pinned_driver_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned Driver Id"
+          },
+          "priority": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole",
+            "default": "passenger"
+          },
+          "seats_available": {
+            "default": 0,
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Seats Available",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "display_name",
+          "pickup"
+        ],
+        "title": "ParticipantCreate",
+        "type": "object"
+      },
+      "ParticipantOrganizerRead": {
+        "description": "The organizer's view: everything, contact details and full address included.\n\nBuilt field by field so that adding a column to `participants` cannot quietly add it to a\nresponse -- which on this table would mean leaking `token_hash` or a pickup point.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "earliest_departure": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliest Departure"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latest_arrival": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Arrival"
+          },
+          "max_detour_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Detour Minutes"
+          },
+          "needs_outbound": {
+            "title": "Needs Outbound",
+            "type": "boolean"
+          },
+          "needs_return": {
+            "title": "Needs Return",
+            "type": "boolean"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "pickup": {
+            "$ref": "#/components/schemas/PickupRead"
+          },
+          "pinned_driver_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned Driver Id"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole"
+          },
+          "seats_available": {
+            "title": "Seats Available",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ParticipantStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "pickup",
+          "role",
+          "seats_available",
+          "priority",
+          "email",
+          "phone",
+          "pinned_driver_id",
+          "needs_outbound",
+          "needs_return",
+          "earliest_departure",
+          "latest_arrival",
+          "max_detour_minutes",
+          "notes",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ParticipantOrganizerRead",
+        "type": "object"
+      },
+      "ParticipantPatch": {
+        "additionalProperties": false,
+        "description": "Every field optional. The pickup moves as a unit, as the event's destination does.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "earliest_departure": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliest Departure"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "latest_arrival": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Arrival"
+          },
+          "max_detour_minutes": {
+            "anyOf": [
+              {
+                "maximum": 240.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Detour Minutes"
+          },
+          "needs_outbound": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs Outbound"
+          },
+          "needs_return": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs Return"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "pickup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Pickup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pinned_driver_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned Driver Id"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticipantRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seats_available": {
+            "anyOf": [
+              {
+                "maximum": 8.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seats Available"
+          }
+        },
+        "title": "ParticipantPatch",
+        "type": "object"
+      },
+      "ParticipantRole": {
+        "enum": [
+          "driver",
+          "passenger",
+          "either"
+        ],
+        "title": "ParticipantRole",
+        "type": "string"
+      },
+      "ParticipantStatus": {
+        "enum": [
+          "active",
+          "cancelled"
+        ],
+        "title": "ParticipantStatus",
+        "type": "string"
+      },
+      "ParticipantWritten": {
+        "description": "The result of any single roster mutation, with the version that mutation produced.",
+        "properties": {
+          "participant": {
+            "$ref": "#/components/schemas/ParticipantOrganizerRead"
+          },
+          "participants_version": {
+            "title": "Participants Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "participant",
+          "participants_version"
+        ],
+        "title": "ParticipantWritten",
+        "type": "object"
+      },
+      "Pickup": {
+        "additionalProperties": false,
+        "description": "Where this person is collected. Latitude first, as everywhere in this API.\n\nCoordinates are required until the Week 4 geocoder can derive them from the address, at which\npoint they become an optional override. They are stored on the participant row with\n`geocode_source = 'user'` -- provider-resolved coordinates go to the TTL'd cache instead, which\nis what keeps the choice of geocoder reversible (docs/design.md 5.2).",
+        "properties": {
+          "address": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Address",
+            "type": "string"
+          },
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lng",
+            "type": "number"
+          }
+        },
+        "required": [
+          "address",
+          "lat",
+          "lng"
+        ],
+        "title": "Pickup",
+        "type": "object"
+      },
+      "PickupRead": {
+        "description": "Coordinates are nullable on the way out: from Week 4 a provider-geocoded participant has none\nof their own, and the solve-time cache supplies them.",
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lng"
+          }
+        },
+        "required": [
+          "address",
+          "lat",
+          "lng"
+        ],
+        "title": "PickupRead",
+        "type": "object"
+      },
+      "Readiness": {
+        "properties": {
+          "database": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Database",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "degraded"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "database"
+        ],
+        "title": "Readiness",
+        "type": "object"
+      },
+      "RosterRead": {
+        "description": "The active roster, with the version it was read at.\n\nThe version travels with the roster so a client can tell that a solution it is displaying was\ncomputed against an earlier one (docs/design.md 5.1).",
+        "properties": {
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantOrganizerRead"
+            },
+            "title": "Participants",
+            "type": "array"
+          },
+          "participants_version": {
+            "title": "Participants Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "participants_version",
+          "participants"
+        ],
+        "title": "RosterRead",
+        "type": "object"
+      },
+      "RouteLeg": {
+        "enum": [
+          "outbound",
+          "return"
+        ],
+        "title": "RouteLeg",
+        "type": "string"
+      },
+      "RouteRead": {
+        "properties": {
+          "detour_seconds": {
+            "title": "Detour Seconds",
+            "type": "integer"
+          },
+          "driver_name": {
+            "title": "Driver Name",
+            "type": "string"
+          },
+          "driver_participant_id": {
+            "format": "uuid",
+            "title": "Driver Participant Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbound": {
+            "$ref": "#/components/schemas/LegRead"
+          },
+          "outbound": {
+            "$ref": "#/components/schemas/LegRead"
+          },
+          "seats_used": {
+            "title": "Seats Used",
+            "type": "integer"
+          },
+          "total_distance_m": {
+            "title": "Total Distance M",
+            "type": "integer"
+          },
+          "total_duration_s": {
+            "title": "Total Duration S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "driver_participant_id",
+          "driver_name",
+          "seats_used",
+          "total_duration_s",
+          "total_distance_m",
+          "detour_seconds",
+          "outbound",
+          "inbound"
+        ],
+        "title": "RouteRead",
+        "type": "object"
+      },
+      "SolutionRead": {
+        "description": "A full solution, as the results screen needs it.",
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_version": {
+            "title": "Input Version",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "objective_value": {
+            "title": "Objective Value",
+            "type": "number"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteRead"
+            },
+            "title": "Routes",
+            "type": "array"
+          },
+          "unassigned": {
+            "items": {
+              "$ref": "#/components/schemas/UnassignedRead"
+            },
+            "title": "Unassigned",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "algorithm",
+          "objective_value",
+          "metrics",
+          "is_active",
+          "input_version",
+          "is_stale",
+          "created_at",
+          "routes",
+          "unassigned"
+        ],
+        "title": "SolutionRead",
+        "type": "object"
+      },
+      "SolutionSummary": {
+        "description": "One entry in the history list. Deliberately without routes -- an organizer comparing runs\nwants the shape of each answer, not every stop in all of them.",
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_version": {
+            "title": "Input Version",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "objective_value": {
+            "title": "Objective Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "algorithm",
+          "objective_value",
+          "metrics",
+          "is_active",
+          "input_version",
+          "is_stale",
+          "created_at"
+        ],
+        "title": "SolutionSummary",
+        "type": "object"
+      },
+      "StopRead": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "eta": {
+            "format": "date-time",
+            "title": "Eta",
+            "type": "string"
+          },
+          "participant_id": {
+            "format": "uuid",
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "pickup_address": {
+            "title": "Pickup Address",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "participant_id",
+          "display_name",
+          "eta",
+          "pickup_address"
+        ],
+        "title": "StopRead",
+        "type": "object"
+      },
+      "UnassignedRead": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "participant_id": {
+            "format": "uuid",
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "participant_id",
+          "display_name",
+          "reason"
+        ],
+        "title": "UnassignedRead",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "Weights": {
+        "additionalProperties": false,
+        "description": "All non-negative: a negative weight would pay the objective to do the thing it names.\n\n**All finite, too.** `json.loads` accepts the non-standard `Infinity` and `NaN` tokens, and a\nbare `float` field takes them, so `allow_inf_nan=False` is what keeps them out. It is not\nhypothetical tidiness: `inf` survived validation, reached `json.dumps`, and came back out as a\nbare `Infinity` token that PostgreSQL's JSONB rejects -- a 500 on an endpoint reachable without\nauthentication. `inf * 0` would also make the objective `NaN` if one ever reached the solver.",
+        "properties": {
+          "churn": {
+            "default": 0.0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Churn",
+            "type": "number"
+          },
+          "drive_time": {
+            "default": 1.0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Drive Time",
+            "type": "number"
+          },
+          "driver_detour": {
+            "default": 1.0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Driver Detour",
+            "type": "number"
+          },
+          "passenger_ride_time": {
+            "default": 0.5,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Passenger Ride Time",
+            "type": "number"
+          },
+          "unassigned": {
+            "default": 100000.0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Unassigned",
+            "type": "number"
+          },
+          "vehicle": {
+            "default": 600.0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Vehicle",
+            "type": "number"
+          }
+        },
+        "title": "Weights",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "description": "Organizer token, shown once at event creation",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "CarpoolOptimizer API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readyz",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/v1/events": {
+      "post": {
+        "description": "Create an event and mint its organizer token.\n\nStatus is `open` on creation: in Model A there is no submission window to wait for, so a `draft`\nstate would be a step every organizer immediately skips.",
+        "operationId": "create_event_v1_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Event",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/{public_id}": {
+      "get": {
+        "operationId": "get_event_v1_events__public_id__get",
+        "parameters": [
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOrganizerRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Event",
+        "tags": [
+          "events"
+        ]
+      },
+      "patch": {
+        "description": "Edit event details.\n\nPermitted while the event is locked: locking freezes the *roster*, and a venue or time change is\nexactly the kind of correction an organizer needs to make after that point. An archived event is\nimmutable.",
+        "operationId": "patch_event_v1_events__public_id__patch",
+        "parameters": [
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOrganizerRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Event",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/lock": {
+      "post": {
+        "description": "Freeze the roster. Idempotent -- re-locking a locked event is a no-op, not an error, because\na double-tapped button is not a conflict.",
+        "operationId": "lock_event_v1_events__public_id__lock_post",
+        "parameters": [
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOrganizerRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Lock Event",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/optimizations": {
+      "post": {
+        "description": "Enqueue -- and, for now, immediately run -- an optimization.\n\n`202` means a job was created. `200` means an existing one is being returned instead: an\nidempotent retry, or a fingerprint matching an instance already solved. The body is identical\neither way, so a client that polls `job_id` need not distinguish them.",
+        "operationId": "create_optimization_v1_events__public_id__optimizations_post",
+        "parameters": [
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OptimizationCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobConflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Optimization",
+        "tags": [
+          "optimizations"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/optimizations/{job_id}": {
+      "delete": {
+        "description": "Request cancellation. Cooperative, by design (docs/design.md 6.3).\n\nThis sets `cancel_requested`; a worker checks it between solver iterations and exits cleanly.\nKilling a worker mid-transaction is not safe, and pretending a `DELETE` does it is a common\nmistake. A finished job is returned untouched: there is nothing left to stop, and rewriting its\nstatus would destroy the record of what happened.",
+        "operationId": "cancel_optimization_v1_events__public_id__optimizations__job_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Optimization",
+        "tags": [
+          "optimizations"
+        ]
+      },
+      "get": {
+        "description": "Poll a job (docs/design.md 4.3 -- polling, not SSE, in v1).\n\nNested under the event rather than at the bare `/v1/optimizations/{job_id}` of docs/design.md 6:\nan organizer token is scoped to an event, so the path must name the event for the dependency to\nauthorize it at all. A flat path would make the job id itself the credential.",
+        "operationId": "get_optimization_v1_events__public_id__optimizations__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Optimization",
+        "tags": [
+          "optimizations"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/participants": {
+      "get": {
+        "description": "The active roster, in the order people were added.\n\nCancelled participants are omitted: they are not on the roster, do not count towards the cap and\nare not given to the solver. They remain readable individually, because a solution computed\nbefore someone dropped out still refers to them.",
+        "operationId": "list_participants_v1_events__public_id__participants_get",
+        "parameters": [
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RosterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Participants",
+        "tags": [
+          "participants"
+        ]
+      },
+      "post": {
+        "description": "Add someone to the roster.\n\nA participant token is minted and stored as a digest, but deliberately **not returned**: no\nendpoint accepts one yet, so handing it out would be handing out a credential that does nothing.\nThe column is not-null, and a digest nobody holds the preimage of is simply unusable until a\nreissue path exists alongside the participant endpoints (docs/design.md 6.1).",
+        "operationId": "add_participant_v1_events__public_id__participants_post",
+        "parameters": [
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParticipantCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantWritten"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Participant",
+        "tags": [
+          "participants"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/participants/{participant_id}": {
+      "delete": {
+        "description": "Take someone off the roster.\n\nA soft cancel: the row stays, `status` becomes `cancelled`, and the seat is returned to the cap.\nIdempotent -- cancelling an already-cancelled participant still answers 200, because the\ncaller's intent is satisfied either way, but it does not bump the version: nothing changed.\n\nAny pin *pointing at* this person is cleared, or the solver would be left holding a constraint\nnaming a driver who is no longer coming.",
+        "operationId": "cancel_participant_v1_events__public_id__participants__participant_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "participant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Participant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantWritten"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Participant",
+        "tags": [
+          "participants"
+        ]
+      },
+      "get": {
+        "operationId": "get_participant_v1_events__public_id__participants__participant_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "participant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Participant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantOrganizerRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Participant",
+        "tags": [
+          "participants"
+        ]
+      },
+      "patch": {
+        "description": "Edit on someone's behalf -- the organizer path for \"my address changed, can you fix it\".\n\nNo cap check: an edit cannot add an active participant, since reactivating a cancelled one is\ndeliberately not offered here (re-adding them is a new snapshot, which is the honest record).",
+        "operationId": "patch_participant_v1_events__public_id__participants__participant_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "participant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Participant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParticipantPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantWritten"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Participant",
+        "tags": [
+          "participants"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/solutions": {
+      "get": {
+        "description": "Every solution for this event, newest first.\n\nHistory is kept rather than overwritten: comparing this week's answer with last week's is how an\norganizer judges whether a re-optimization was worth the disruption (docs/design.md 8.4).",
+        "operationId": "list_solutions_v1_events__public_id__solutions_get",
+        "parameters": [
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SolutionSummary"
+                  },
+                  "title": "Response List Solutions V1 Events  Public Id  Solutions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Solutions",
+        "tags": [
+          "solutions"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/solutions/{solution_id}": {
+      "get": {
+        "operationId": "get_solution_v1_events__public_id__solutions__solution_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Solution Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Solution",
+        "tags": [
+          "solutions"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/solutions/{solution_id}/activate": {
+      "post": {
+        "description": "Make this the event's live answer.\n\nDeactivating the incumbent and activating this one happen in one transaction, so\n`one_active_solution_per_event` is never momentarily violated and no reader ever sees two live\nanswers or none. Activating the already-active solution is a no-op rather than an error.\n\nA stale solution can still be activated on purpose: the organizer may well prefer a known\narrangement over re-solving an hour before the event. The response says it is stale; it does not\nrefuse.",
+        "operationId": "activate_solution_v1_events__public_id__solutions__solution_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Solution Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Activate Solution",
+        "tags": [
+          "solutions"
+        ]
+      }
+    }
+  }
+}

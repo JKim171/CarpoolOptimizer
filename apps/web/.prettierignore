@@ -1,0 +1,6 @@
+.next/
+node_modules/
+# Generated from the API's OpenAPI document by `make openapi`; reformatting it would make the
+# regenerate-and-diff check fail against its own generator.
+lib/api/schema.d.ts
+lib/api/openapi.json

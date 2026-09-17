@@ -57,14 +57,22 @@ belongs in `adapters/`.
 ## Commands
 
 ```sh
-make setup     # venv + dev dependencies + editable install
-make check     # ruff, ruff format --check, mypy (strict), pytest
+make setup     # venv + dev dependencies + editable install, and npm ci for the web app
+make check     # ruff, ruff format --check, mypy (strict), pytest, then the web checks
 make test      # pytest only
 make fmt       # ruff format + ruff check --fix
 make db        # postgres + postgis via docker compose
+make api       # uvicorn on :8000
+make web       # next dev on :3000
+make openapi   # regenerate the API contract and the TypeScript types built from it
 ```
 
-`make check` must pass before a commit. CI runs the same steps.
+`make check` must pass before a commit. CI runs the same steps, in two jobs (`check` and `web`).
+
+**The API contract is generated, not hand-written.** `apps/web/lib/api/schema.d.ts` comes from
+`apps/web/lib/api/openapi.json`, which comes from the Pydantic schemas. Change a route or a model
+and `make openapi`, or `test_openapi_contract.py` fails the build — the same guard as the migration
+drift test, one layer out. Never edit either generated file by hand.
 
 Commits use [Conventional Commits](https://www.conventionalcommits.org/): `feat(domain): …`,
 `fix(api): …`, `docs: …`. The two plain-subject commits early in the history predate this.
@@ -73,9 +81,15 @@ Commits use [Conventional Commits](https://www.conventionalcommits.org/): `feat(
 
 ```
 packages/domain/   pure optimization domain — models, objective, feasibility validation
-apps/web/          Next.js frontend (not yet started)
+apps/api/          FastAPI service — schema, endpoints, the DB↔domain adapter
+apps/web/          Next.js frontend (App Router, TypeScript strict)
+infra/             Terraform — VPC, instance, buckets, IAM, alarms
 docs/              design document and roadmap
 ```
+
+Nothing with the `NEXT_PUBLIC_` prefix is a secret: Next compiles those values into the browser
+bundle. The ORS key in particular stays on the API, which is why geocoding is proxied rather than
+called from the browser (`docs/design.md` §4.4).
 
 ## Conventions
 

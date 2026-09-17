@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     #: declared now so the deployment carries it from the start.
     ors_api_key: str | None = None
 
+    #: Browser origins allowed to call this API. The web app is deployed separately (Vercel), so
+    #: every call from it is cross-origin, including in development. Production overrides this from
+    #: the instance environment; the default is the `next dev` origin so a fresh checkout works.
+    #: Parsed as JSON, e.g. CORS_ALLOW_ORIGINS=["https://carpool.example"].
+    cors_allow_origins: list[str] = Field(default=["http://localhost:3000"])
+
     environment: str = Field(default="development")
 
 

@@ -14,8 +14,10 @@ from typing import Any
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from carpool_api.config import get_settings
 from carpool_api.db import dispose_engine
 from carpool_api.routes import events, ops, optimizations, participants, solutions
 
@@ -60,6 +62,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.add_exception_handler(RequestValidationError, _validation_error)
+    # `allow_credentials=False` is deliberate. Every authenticated call carries an organizer token
+    # in an `Authorization` header, so the browser never needs to attach a cookie -- and with no
+    # credentials in play a mistaken origin cannot be used to ride an existing session. The token,
+    # not CORS, is the authorization boundary (docs/design.md 6.1).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=get_settings().cors_allow_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
     app.include_router(ops.router)
     app.include_router(events.router)
     app.include_router(participants.router)
