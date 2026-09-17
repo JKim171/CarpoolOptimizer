@@ -103,11 +103,11 @@ export function DestinationMap({
     <div className={className}>
       <div
         ref={container}
-        className="h-64 w-full overflow-hidden rounded-md border border-black/10 dark:border-white/15"
+        className="h-64 w-full overflow-hidden rounded-md border border-line bg-surface-sunken"
         role="application"
         aria-label="Destination location. Drag the marker to correct it."
       />
-      <p className="mt-1 text-xs opacity-60">
+      <p className="mt-1 text-xs text-ink-muted">
         {failed
           ? "The map could not load. You can still enter an address and coordinates below."
           : point

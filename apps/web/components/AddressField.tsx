@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Field, TextInput } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import { MIN_QUERY, type Place, suggest } from "@/lib/api/geocode";
 
@@ -76,10 +77,8 @@ export function AddressField({
 
   return (
     <div className="relative">
-      <label className="block text-sm font-medium">
-        {label}
-        <input
-          className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+      <Field label={label} hint={note}>
+        <TextInput
           value={value}
           placeholder={placeholder}
           autoComplete="off"
@@ -91,17 +90,15 @@ export function AddressField({
           // A click on a suggestion blurs the input first, so closing is deferred past the click.
           onBlur={() => setTimeout(() => setOpen(false), 150)}
         />
-      </label>
-
-      {note && <p className="mt-1 text-xs opacity-60">{note}</p>}
+      </Field>
 
       {open && places.length > 0 && (
-        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-black/15 bg-white shadow-lg dark:border-white/20 dark:bg-neutral-900">
+        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-line bg-surface shadow-lg">
           {places.map((place, index) => (
             <li key={`${place.address}-${index}`}>
               <button
                 type="button"
-                className="block w-full px-3 py-2 text-left text-sm hover:bg-black/5 dark:hover:bg-white/10"
+                className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-surface-sunken"
                 onClick={() => {
                   onPick(place);
                   setOpen(false);
@@ -109,9 +106,7 @@ export function AddressField({
               >
                 {place.address}
                 {place.is_approximate && (
-                  <span className="ml-2 text-xs text-amber-700 dark:text-amber-400">
-                    approximate
-                  </span>
+                  <span className="ml-2 text-xs text-warn-ink">approximate</span>
                 )}
               </button>
             </li>

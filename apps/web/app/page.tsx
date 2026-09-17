@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSyncExternalStore } from "react";
 
 import { CreateEventForm } from "@/components/CreateEventForm";
+import { Page, Panel } from "@/components/ui/controls";
 import {
   knownEventsServerSnapshot,
   knownEventsSnapshot,
@@ -21,30 +22,38 @@ export default function Home() {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 p-6 sm:p-8">
+    <Page>
       <header>
-        <h1 className="text-2xl font-semibold">CarpoolOptimizer</h1>
-        <p className="mt-1 text-sm opacity-70">
+        <h1 className="text-2xl font-semibold text-ink">CarpoolOptimizer</h1>
+        <p className="mt-1 text-sm text-ink-muted">
           Enter a roster, get an assignment: who drives whom, in what pickup order, out and back.
         </p>
       </header>
 
+      {/*
+       * Known limitation: this list is whatever tokens localStorage holds, so it keeps listing an
+       * event that has since been deleted, archived, or whose token expired -- opening one of those
+       * gets the 401 the event page renders. Resolving it needs either a liveness check on mount or
+       * a "remove from this device" action, and it belongs with the roster slice rather than here.
+       */}
       {known.length > 0 && (
         <section>
-          <h2 className="text-sm font-medium">Your events on this device</h2>
-          <ul className="mt-2 flex flex-col gap-1">
-            {known.map((publicId) => (
-              <li key={publicId}>
-                <Link
-                  href={`/events/${publicId}`}
-                  className="text-sm text-blue-700 underline underline-offset-2 dark:text-blue-400"
-                >
-                  {publicId}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs opacity-60">
+          <h2 className="mb-2 text-sm font-medium text-ink">Your events on this device</h2>
+          <Panel className="p-0">
+            <ul className="divide-y divide-line">
+              {known.map((publicId) => (
+                <li key={publicId}>
+                  <Link
+                    href={`/events/${publicId}`}
+                    className="block px-4 py-3 font-mono text-sm text-accent hover:bg-surface-sunken"
+                  >
+                    {publicId}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          <p className="mt-2 text-xs text-ink-muted">
             Organizer tokens are kept in this browser only. On another device you will need the link
             and its token.
           </p>
@@ -52,9 +61,9 @@ export default function Home() {
       )}
 
       <section>
-        <h2 className="mb-3 text-sm font-medium">New event</h2>
+        <h2 className="mb-3 text-sm font-medium text-ink">New event</h2>
         <CreateEventForm />
       </section>
-    </main>
+    </Page>
   );
 }

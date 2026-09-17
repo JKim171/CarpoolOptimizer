@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/**
+ * Semantic tokens, not raw colours.
+ *
+ * Components name what a colour is *for* -- `border-line`, `text-ink-muted` -- so dark mode is one
+ * block of overrides here rather than a `dark:` variant on every element. The screens are dense
+ * (a fifty-row roster, a results sidebar), and `dark:` pairs sprinkled through that are how a
+ * palette drifts out of alignment.
+ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  --surface: #ffffff;
+  /* Inputs, cards and the map frame: one step off the page so edges read without a heavy border. */
+  --surface-raised: #f7f7f8;
+  --surface-sunken: #f0f0f2;
+  --line: #d9d9de;
+  --line-strong: #b8b8c0;
+  --ink: #17171a;
+  --ink-muted: #63636d;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --accent-ink: #ffffff;
+  --danger-surface: #fef2f2;
+  --danger-ink: #991b1b;
+  --warn-ink: #92400e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --surface: #0d0d0f;
+    --surface-raised: #17171a;
+    --surface-sunken: #1f1f23;
+    --line: #2e2e34;
+    --line-strong: #44444c;
+    --ink: #ededf0;
+    --ink-muted: #9a9aa4;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-ink: #0d0d0f;
+    --danger-surface: #2a1213;
+    --danger-ink: #fca5a5;
+    --warn-ink: #fbbf24;
   }
 }
 
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger-surface: var(--danger-surface);
+  --color-danger-ink: var(--danger-ink);
+  --color-warn-ink: var(--warn-ink);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  /* The scaffold hardcoded Arial here, which silently overrode the font `layout.tsx` loads. */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/**
+ * One focus treatment everywhere. Keyboard use is not a nicety on this screen: entering a roster is
+ * a long stretch of tabbing between fields, and a focus ring that disappears loses the operator's
+ * place.
+ */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

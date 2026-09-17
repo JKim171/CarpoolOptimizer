@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { AddressField } from "@/components/AddressField";
 import { DestinationMap, type Point } from "@/components/DestinationMap";
+import { Button, Field, Problem, Select, TextInput } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import { createEvent } from "@/lib/api/events";
 import type { Place } from "@/lib/api/geocode";
@@ -66,18 +67,16 @@ export function CreateEventForm() {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <label className="block text-sm font-medium">
-        Event name
-        <input
-          className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      <Field label="Event name">
+        <TextInput
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="Tuesday practice"
           required
           maxLength={200}
         />
-      </label>
+      </Field>
 
       <AddressField
         label="Destination"
@@ -89,61 +88,43 @@ export function CreateEventForm() {
 
       <DestinationMap point={point} onMove={setPoint} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block text-sm font-medium">
-          Everyone arrives by
-          <input
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Everyone arrives by">
+          <TextInput
             type="datetime-local"
-            className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
             value={arrival}
             onChange={(event) => setArrival(event.target.value)}
             required
           />
-        </label>
-        <label className="block text-sm font-medium">
-          Event ends
-          <input
+        </Field>
+        <Field label="Event ends">
+          <TextInput
             type="datetime-local"
-            className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
             value={ends}
             onChange={(event) => setEnds(event.target.value)}
             required
           />
-        </label>
+        </Field>
       </div>
 
-      <label className="block text-sm font-medium">
-        Time zone
-        <select
-          className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-          value={timeZone}
-          onChange={(event) => setTimeZone(event.target.value)}
-        >
+      <Field
+        label="Time zone"
+        hint="Times above are read as the clock in this zone, so the event survives a daylight-saving change."
+      >
+        <Select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>
           {knownTimeZones().map((zone) => (
             <option key={zone} value={zone}>
               {zone}
             </option>
           ))}
-        </select>
-        <span className="mt-1 block text-xs font-normal opacity-60">
-          Times above are read as the clock in this zone, so the event survives a daylight-saving
-          change.
-        </span>
-      </label>
+        </Select>
+      </Field>
 
-      {problem && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
-          {problem}
-        </p>
-      )}
+      {problem && <Problem>{problem}</Problem>}
 
-      <button
-        type="submit"
-        disabled={create.isPending}
-        className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
+      <Button type="submit" disabled={create.isPending}>
         {create.isPending ? "Creating…" : "Create event"}
-      </button>
+      </Button>
     </form>
   );
 }
