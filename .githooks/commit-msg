@@ -1,0 +1,34 @@
+#!/bin/sh
+# Commits in this repository name a single author.
+#
+# Reject co-author trailers, which some tooling appends by default. The git `Author` field is not
+# the issue -- GitHub parses `Co-Authored-By:` out of the message body and credits it separately, so
+# one stray line changes who the repository appears to have been written by.
+#
+# Enforced here rather than written down because the failure is silent at commit time and awkward
+# afterwards: noticing it once pushed means rewriting published history.
+#
+# Runs only when core.hooksPath points at this directory; `make setup` does that.
+
+msg_file="$1"
+
+# Comment lines are stripped by git before the message is used, so ignore them here too.
+if grep -v '^#' "$msg_file" | grep -qiE '^[[:space:]]*(co-authored-by|co-committed-by):'; then
+	echo "commit-msg: refusing a co-author trailer." >&2
+	echo >&2
+	grep -v '^#' "$msg_file" | grep -inE '^[[:space:]]*(co-authored-by|co-committed-by):' >&2
+	echo >&2
+	echo "Commits here name a single author. Remove the line and commit again." >&2
+	exit 1
+fi
+
+if grep -v '^#' "$msg_file" | grep -qiE 'generated with \[?claude|🤖 generated with'; then
+	echo "commit-msg: refusing a generated-by line." >&2
+	echo >&2
+	grep -v '^#' "$msg_file" | grep -inE 'generated with \[?claude|🤖 generated with' >&2
+	echo >&2
+	echo "Commits here name a single author. Remove the line and commit again." >&2
+	exit 1
+fi
+
+exit 0

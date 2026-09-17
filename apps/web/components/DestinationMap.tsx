@@ -12,29 +12,15 @@
  * action rather than the provider, so it is not subject to a geocoder's storage terms and is stored
  * with `geocode_source = 'user'` (docs/design.md 5.2).
  *
- * Tiles are OpenFreeMap. MapLibre is a renderer, not a tile source (docs/design.md 7.5), so a
- * source had to be chosen: OpenFreeMap needs no key and no account, which keeps the "no credential
- * ever reaches the browser" property the rest of this design depends on. MapTiler and Stadia both
- * want a key that would either ship in the bundle or need a second proxy.
+ * Tile source and worker setup are shared -- see `components/map/basemap.ts`.
  */
 
-import { Map as MapLibreMap, Marker, NavigationControl, setWorkerUrl } from "maplibre-gl";
+import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
+import { FALLBACK_CENTER, STYLE } from "@/components/map/basemap";
+
 import "maplibre-gl/dist/maplibre-gl.css";
-
-const STYLE = "https://tiles.openfreemap.org/styles/liberty";
-
-/**
- * Point MapLibre at the worker copied into `public/` by `scripts/copy-maplibre-worker.mjs`.
- *
- * Without this the worker request resolves through `import.meta.url` to something Turbopack never
- * emitted, Next answers with its HTML 404 page, and the browser rejects it for its MIME type. No
- * tile is then decoded, while the style and sprites -- fetched on the main thread -- load fine, so
- * the map is a correctly sized blank rectangle and MapLibre reports no error. That failure took a
- * while to find; see the script for why 5.x is not the way out.
- */
-setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 export type Point = { lat: number; lng: number };
 
@@ -67,10 +53,8 @@ export function DestinationMap({
     const instance = new MapLibreMap({
       container: container.current,
       style: STYLE,
-      center: point ? [point.lng, point.lat] : [-83.743, 42.2808],
+      center: point ? [point.lng, point.lat] : FALLBACK_CENTER,
       zoom: point ? 15 : 11,
-      // Attribution is not decoration: OpenFreeMap serves OpenStreetMap data and the licence
-      // requires crediting it.
       attributionControl: { compact: true },
     });
     instance.addControl(new NavigationControl({ showCompass: false }), "top-right");

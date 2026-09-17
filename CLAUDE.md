@@ -77,6 +77,15 @@ drift test, one layer out. Never edit either generated file by hand.
 Commits use [Conventional Commits](https://www.conventionalcommits.org/): `feat(domain): …`,
 `fix(api): …`, `docs: …`. The two plain-subject commits early in the history predate this.
 
+Commits and pull requests **name a single author**: no `Co-Authored-By:` trailer and no
+"generated with" line, in a commit message or a PR description. Some tooling appends these by
+default; this rule overrides that default.
+
+`.githooks/commit-msg` enforces it, so a stray trailer fails the commit rather than being noticed
+later. `.git/hooks` is not committed, so the hook lives in `.githooks/` and `make setup` points
+`core.hooksPath` at it — after a fresh clone, run `make setup` (or
+`git config core.hooksPath .githooks`) or the hook is not active.
+
 ## Layout
 
 ```

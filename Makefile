@@ -1,9 +1,13 @@
 .PHONY: setup test lint fmt typecheck check db migrate revision api \
         web-setup web web-check openapi
 
-setup: web-setup
+setup: web-setup hooks
 	python3 -m venv .venv
 	.venv/bin/pip install -q -U pip -r requirements-dev.txt -e packages/domain -e 'apps/api[test]'
+
+# .git/hooks is not committed, so a fresh clone has no hooks until this runs.
+hooks:
+	git config core.hooksPath .githooks
 
 web-setup:
 	cd apps/web && npm ci

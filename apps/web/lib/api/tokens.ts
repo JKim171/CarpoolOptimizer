@@ -70,19 +70,22 @@ export function knownEventIds(): string[] {
  */
 const NONE: string[] = [];
 let snapshot: string[] | null = null;
+const listeners = new Set<() => void>();
 
 export function subscribeToKnownEvents(onChange: () => void): () => void {
-  const invalidate = () => {
-    // The snapshot must be a stable reference between changes: returning a fresh array every call
-    // makes `useSyncExternalStore` re-render forever.
-    snapshot = null;
-    onChange();
+  listeners.add(onChange);
+  // `storage` fires only in *other* tabs, which is exactly the case this listener is for. Writes in
+  // this tab notify through `forgetKnownEventsCache` below.
+  window.addEventListener("storage", forgetKnownEventsCache);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener("storage", forgetKnownEventsCache);
   };
-  window.addEventListener("storage", invalidate);
-  return () => window.removeEventListener("storage", invalidate);
 }
 
 export function knownEventsSnapshot(): string[] {
+  // The snapshot must be a stable reference between changes: returning a fresh array every call
+  // makes `useSyncExternalStore` re-render forever.
   snapshot ??= knownEventIds();
   return snapshot;
 }
@@ -91,7 +94,14 @@ export function knownEventsServerSnapshot(): string[] {
   return NONE;
 }
 
-/** Call after writing a token in this tab -- `storage` events only fire in *other* tabs. */
+/**
+ * Drop the cached list and tell React about it.
+ *
+ * Invalidating without notifying is a silent no-op: `useSyncExternalStore` only re-reads when a
+ * subscriber fires, so a token written or forgotten in *this* tab would not reach the screen until
+ * something else happened to re-render.
+ */
 export function forgetKnownEventsCache(): void {
   snapshot = null;
+  for (const listener of listeners) listener();
 }

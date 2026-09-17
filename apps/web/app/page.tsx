@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { Page, Panel } from "@/components/ui/controls";
 import {
+  forgetToken,
   knownEventsServerSnapshot,
   knownEventsSnapshot,
   subscribeToKnownEvents,
@@ -31,10 +32,12 @@ export default function Home() {
       </header>
 
       {/*
-       * Known limitation: this list is whatever tokens localStorage holds, so it keeps listing an
-       * event that has since been deleted, archived, or whose token expired -- opening one of those
-       * gets the 401 the event page renders. Resolving it needs either a liveness check on mount or
-       * a "remove from this device" action, and it belongs with the roster slice rather than here.
+       * This list is whatever tokens localStorage holds, so it keeps listing an event that has
+       * since been deleted or archived, or whose token expired -- opening one gets the 401 the
+       * event page renders. A liveness check on mount was the alternative and is the wrong shape:
+       * the 401 is deliberately ambiguous (docs/design.md 6.1), so it cannot distinguish "deleted"
+       * from "expired token" and would have to report both as one vague message anyway. Letting
+       * the organizer remove a dead row says exactly as much as the app actually knows.
        */}
       {known.length > 0 && (
         <section>
@@ -42,20 +45,29 @@ export default function Home() {
           <Panel className="p-0">
             <ul className="divide-y divide-line">
               {known.map((publicId) => (
-                <li key={publicId}>
+                <li key={publicId} className="flex items-center gap-2 pr-2">
                   <Link
                     href={`/events/${publicId}`}
-                    className="block px-4 py-3 font-mono text-sm text-accent hover:bg-surface-sunken"
+                    className="flex-1 px-4 py-3 font-mono text-sm text-accent hover:bg-surface-sunken"
                   >
                     {publicId}
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => forgetToken(publicId)}
+                    aria-label={`Remove ${publicId} from this device`}
+                    title="Remove from this device"
+                    className="rounded-md px-2 py-1 text-xs text-ink-muted hover:text-danger-ink"
+                  >
+                    Remove
+                  </button>
                 </li>
               ))}
             </ul>
           </Panel>
           <p className="mt-2 text-xs text-ink-muted">
             Organizer tokens are kept in this browser only. On another device you will need the link
-            and its token.
+            and its token. Removing forgets the token here — it does not delete the event.
           </p>
         </section>
       )}
