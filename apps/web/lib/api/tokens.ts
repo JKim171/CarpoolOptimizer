@@ -40,10 +40,12 @@ export function readToken(publicId: string): string | null {
 
 export function writeToken(publicId: string, token: string): void {
   storage()?.setItem(keyFor(publicId), token);
+  forgetKnownEventsCache();
 }
 
 export function forgetToken(publicId: string): void {
   storage()?.removeItem(keyFor(publicId));
+  forgetKnownEventsCache();
 }
 
 /** Every event this browser holds a token for, for the "your events" list on the home screen. */
@@ -56,4 +58,40 @@ export function knownEventIds(): string[] {
     if (key?.startsWith(PREFIX)) ids.push(key.slice(PREFIX.length));
   }
   return ids;
+}
+
+/**
+ * `useSyncExternalStore` plumbing for that list.
+ *
+ * localStorage does not exist while rendering on the server, so the list cannot simply be read
+ * during render -- and reading it in an effect means a setState that React now warns about. This is
+ * the shape React actually wants for "state that lives outside React": a server snapshot of empty,
+ * a cached client snapshot, and invalidation when another tab writes a token.
+ */
+const NONE: string[] = [];
+let snapshot: string[] | null = null;
+
+export function subscribeToKnownEvents(onChange: () => void): () => void {
+  const invalidate = () => {
+    // The snapshot must be a stable reference between changes: returning a fresh array every call
+    // makes `useSyncExternalStore` re-render forever.
+    snapshot = null;
+    onChange();
+  };
+  window.addEventListener("storage", invalidate);
+  return () => window.removeEventListener("storage", invalidate);
+}
+
+export function knownEventsSnapshot(): string[] {
+  snapshot ??= knownEventIds();
+  return snapshot;
+}
+
+export function knownEventsServerSnapshot(): string[] {
+  return NONE;
+}
+
+/** Call after writing a token in this tab -- `storage` events only fire in *other* tabs. */
+export function forgetKnownEventsCache(): void {
+  snapshot = null;
 }

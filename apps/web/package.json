@@ -12,10 +12,13 @@
     "typecheck": "next typegen && tsc --noEmit",
     "types:generate": "openapi-typescript lib/api/openapi.json -o lib/api/schema.d.ts",
     "types:check": "openapi-typescript lib/api/openapi.json -o node_modules/.cache/schema.d.ts && diff -u lib/api/schema.d.ts node_modules/.cache/schema.d.ts",
-    "check": "npm run format:check && npm run lint && npm run types:check && npm run typecheck"
+    "check": "npm run format:check && npm run lint && npm run types:check && npm run typecheck && npm run test",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@tanstack/react-query": "5.103.1",
+    "maplibre-gl": "^6.10.0",
     "next": "16.3.5",
     "openapi-fetch": "0.17.0",
     "react": "19.2.8",
@@ -23,7 +26,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.13.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
@@ -31,6 +34,7 @@
     "openapi-typescript": "7.13.0",
     "prettier": "3.8.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.1"
   }
 }
