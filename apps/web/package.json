@@ -13,7 +13,10 @@
     "types:generate": "openapi-typescript lib/api/openapi.json -o lib/api/schema.d.ts",
     "types:check": "openapi-typescript lib/api/openapi.json -o node_modules/.cache/schema.d.ts && diff -u lib/api/schema.d.ts node_modules/.cache/schema.d.ts",
     "check": "npm run format:check && npm run lint && npm run types:check && npm run typecheck && npm run test",
-    "test": "vitest run"
+    "test": "vitest run",
+    "maplibre:worker": "node scripts/copy-maplibre-worker.mjs",
+    "predev": "npm run maplibre:worker",
+    "prebuild": "npm run maplibre:worker"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

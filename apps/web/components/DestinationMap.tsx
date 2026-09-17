@@ -18,12 +18,23 @@
  * want a key that would either ship in the bundle or need a second proxy.
  */
 
-import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
+import { Map as MapLibreMap, Marker, NavigationControl, setWorkerUrl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
 const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+
+/**
+ * Point MapLibre at the worker copied into `public/` by `scripts/copy-maplibre-worker.mjs`.
+ *
+ * Without this the worker request resolves through `import.meta.url` to something Turbopack never
+ * emitted, Next answers with its HTML 404 page, and the browser rejects it for its MIME type. No
+ * tile is then decoded, while the style and sprites -- fetched on the main thread -- load fine, so
+ * the map is a correctly sized blank rectangle and MapLibre reports no error. That failure took a
+ * while to find; see the script for why 5.x is not the way out.
+ */
+setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 export type Point = { lat: number; lng: number };
 
