@@ -9,10 +9,18 @@ decision point, not a foregone conclusion").
 Three mechanisms keep repeat requests from doing repeat work, in increasing order of bluntness:
 
 1. **`one_active_job_per_event`**, a partial unique index. Two requests racing cannot both enqueue;
-   the loser's insert raises and becomes a `409` naming the job that won. No lock, no race window.
+   the loser's insert raises and becomes a `409` naming the job that won. No lock needed.
 2. **`Idempotency-Key`**, when the client sends one. A retried request returns the original job.
 3. **`input_fingerprint`.** A request whose problem is byte-identical to one already solved returns
    that solution without solving, which is what makes re-running an untouched event instant.
+
+**(1) and (3) only compose if (3) is checked after the insert, and that is not obvious.** The index
+covers jobs that are *in flight*; a job that has finished has left it. Since the job row is
+committed before the solve runs, a winner spends most of its life neither protected by the index nor
+yet visible to a fingerprint check made a moment earlier -- so a concurrent request can slip between
+the two and enqueue a duplicate. `create_optimization` therefore asks "already solved?" again once
+its insert has succeeded, which is the point at which the index guarantees no rival is in flight.
+No lock closes this: the winner releases everything at that commit, before it does the work.
 
 The job row is committed *before* the solve, and the outcome written after. That is the boundary a
 worker would sit on, so keeping it here is what makes Week 4 a change of executor rather than a
@@ -91,6 +99,43 @@ async def _reclaim_expired_leases(session: AsyncSession, event_id: uuid.UUID) ->
             finished_at=datetime.now(UTC),
         )
     )
+
+
+class _AlreadySolved(Exception):
+    """Raised inside the insert savepoint to unwind it when this problem is already solved.
+
+    An exception rather than a flag because the savepoint is a context manager: leaving it by
+    raising is what discards the row that was just inserted.
+    """
+
+    def __init__(self, job: OptimizationJob) -> None:
+        super().__init__("this input has already been solved")
+        self.job = job
+
+
+async def _already_solved(
+    session: AsyncSession,
+    event_id: uuid.UUID,
+    fingerprint: bytes,
+    input_version: int,
+) -> OptimizationJob | None:
+    """A finished job whose solution answers exactly this problem, if one exists.
+
+    Both the fingerprint and the roster version have to match: the fingerprint says the problem is
+    byte-identical, and the version says the roster has not moved since (docs/design.md 5.1).
+    """
+    found = await session.execute(
+        select(OptimizationJob)
+        .join(Solution, Solution.job_id == OptimizationJob.id)
+        .where(
+            OptimizationJob.event_id == event_id,
+            OptimizationJob.status == JobStatus.SUCCEEDED,
+            OptimizationJob.input_fingerprint == fingerprint,
+            OptimizationJob.input_version == input_version,
+        )
+        .order_by(OptimizationJob.finished_at.desc())
+    )
+    return found.scalars().first()
 
 
 async def _destination(session: AsyncSession, event: Event) -> Location:
@@ -175,18 +220,7 @@ async def create_optimization(
             response.status_code = status.HTTP_200_OK
             return await _read(session, existing, public_id)
 
-    reusable = await session.execute(
-        select(OptimizationJob)
-        .join(Solution, Solution.job_id == OptimizationJob.id)
-        .where(
-            OptimizationJob.event_id == event_id,
-            OptimizationJob.status == JobStatus.SUCCEEDED,
-            OptimizationJob.input_fingerprint == fingerprint,
-            OptimizationJob.input_version == input_version,
-        )
-        .order_by(OptimizationJob.finished_at.desc())
-    )
-    if (solved := reusable.scalars().first()) is not None:
+    if (solved := await _already_solved(session, event_id, fingerprint, input_version)) is not None:
         response.status_code = status.HTTP_200_OK
         return await _read(session, solved, public_id)
 
@@ -211,6 +245,29 @@ async def create_optimization(
         async with session.begin_nested():
             session.add(job)
             await session.flush()
+            # Ask again, now that the insert has gone through. This is the check that actually
+            # closes the race, and the earlier one is only a fast path.
+            #
+            # The reasoning: this insert succeeding *proves* no job was in flight for this event at
+            # that instant, because `one_active_job_per_event` would have rejected it. So any job
+            # that could have solved this same problem already reached a terminal state, and a
+            # terminal state means committed -- which this statement, on a fresh read-committed
+            # snapshot taken after the insert, is guaranteed to see.
+            #
+            # Checking only beforehand leaves a window no lock can close: the winner commits its
+            # job and *then* solves, releasing anything it held, so the job it owns flips from
+            # in-flight to succeeded while a concurrent request is between its check and its
+            # insert. That request then finds nothing to reuse and nothing to collide with, and
+            # a second job gets created for an identical roster -- a `202` where the contract
+            # promises `200`, and in Week 4 a second ORS matrix call against a 500/day quota.
+            # CI caught exactly this on 2026-09-17.
+            duplicate = await _already_solved(session, event_id, fingerprint, input_version)
+            if duplicate is not None:
+                # Unwinds the savepoint, so the job just inserted never existed.
+                raise _AlreadySolved(duplicate)
+    except _AlreadySolved as hit:
+        response.status_code = status.HTTP_200_OK
+        return await _read(session, hit.job, public_id)
     except IntegrityError as exc:
         if not violates(exc, _IN_FLIGHT_INDEX):
             raise

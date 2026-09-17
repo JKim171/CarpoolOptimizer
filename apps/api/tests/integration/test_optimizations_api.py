@@ -295,8 +295,17 @@ async def test_concurrent_optimize_requests_produce_one_job(
     """`one_active_job_per_event` is the enforcement; the API only translates it to 409.
 
     Whether a loser sees 409 or the winner's already-finished solution depends on how far the winner
-    got, so what is asserted is the invariant, not the status mix: exactly one job exists, and no
-    caller is left without an answer.
+    got, so what is asserted is the invariant, not the status mix: **one job for one problem**, and
+    no caller left without an answer.
+
+    What makes it hold is the re-check *after* the insert in `create_optimization`. Without it the
+    losers read "nothing solved yet", the winner commits its job and then finishes solving -- which
+    takes it out of the partial index, since that only covers jobs still in flight -- and a loser's
+    insert then succeeds, producing a second job for an identical roster.
+
+    This failed in CI on 2026-09-17 and passes on a fast machine either way, which is the point:
+    the window is real but narrow, so the assertion that matters is the job count, and the status
+    mix is only checked for "everyone got a sensible answer".
     """
     public_id, headers = organizer_event
     await seed_roster(api_client, organizer_event)
@@ -309,8 +318,11 @@ async def test_concurrent_optimize_requests_produce_one_job(
     )
 
     codes = sorted(response.status_code for response in responses)
-    assert codes.count(202) == 1, codes
     assert all(code in (200, 202, 409) for code in codes), codes
+    # Exactly one caller may be told it created something. The rest were either refused (409) or
+    # handed the winner's answer (200); which of those they get is a timing detail, and asserting
+    # the mix would be asserting how fast the solve ran.
+    assert codes.count(202) == 1, codes
 
     async with engine.connect() as conn:
         jobs = (
@@ -323,6 +335,60 @@ async def test_concurrent_optimize_requests_produce_one_job(
             )
         ).scalar_one()
     assert jobs == 1
+
+
+async def test_a_slow_request_cannot_enqueue_a_duplicate_after_the_winner_finishes(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    monkeypatch,
+) -> None:
+    """The race above, made deterministic instead of left to timing.
+
+    The defect needs a request to be *between* its "already solved?" check and its insert while the
+    winner commits and finishes solving. On a fast machine that window is microseconds and the test
+    above passes whether or not the bug is present -- which is exactly why CI caught this and local
+    runs did not.
+
+    Widening the window on purpose is what makes the assertion mean something. The delay goes into
+    `_reclaim_expired_leases` because that is the step which genuinely sits in the gap, so this
+    exercises the real ordering rather than a rearranged one.
+    """
+    from carpool_api.routes import optimizations
+
+    original = optimizations._reclaim_expired_leases
+
+    async def slow_reclaim(session, event_id):
+        await original(session, event_id)
+        await asyncio.sleep(0.4)
+
+    monkeypatch.setattr(optimizations, "_reclaim_expired_leases", slow_reclaim)
+
+    public_id, headers = organizer_event
+    await seed_roster(api_client, organizer_event)
+
+    responses = await asyncio.gather(
+        *(
+            api_client.post(f"/v1/events/{public_id}/optimizations", headers=headers, json={})
+            for _ in range(4)
+        )
+    )
+
+    codes = sorted(response.status_code for response in responses)
+    assert all(code in (200, 202, 409) for code in codes), codes
+    assert codes.count(202) == 1, codes
+
+    async with engine.connect() as conn:
+        jobs = (
+            await conn.execute(
+                text(
+                    "select count(*) from optimization_jobs j join events e on e.id = j.event_id"
+                    " where e.public_id = :p"
+                ),
+                {"p": public_id},
+            )
+        ).scalar_one()
+    assert jobs == 1, "a second job was enqueued for an identical roster"
 
 
 async def test_a_job_can_be_polled(
