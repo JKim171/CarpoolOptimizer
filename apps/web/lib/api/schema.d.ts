@@ -300,6 +300,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/geocode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Geocode
+         * @description Resolve a batch of complete addresses, cache-first.
+         *
+         *     Batched because a pasted roster is the case that matters: forty addresses as forty requests is
+         *     forty round trips and forty cache queries, against a provider limited to 100 calls a minute.
+         */
+        post: operations["geocode_v1_geocode_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/geocode/autocomplete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Autocomplete
+         * @description Suggestions for a partial address.
+         *
+         *     **Not cached.** `geocode_cache` is keyed by a full normalized address; a prefix is not one, and
+         *     storing every keystroke would fill the table with strings no one will ever look up again. The
+         *     address the coordinator actually picks is resolved through `POST /v1/geocode`, which is cached.
+         */
+        get: operations["autocomplete_v1_geocode_autocomplete_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -417,6 +464,22 @@ export interface components {
          * @enum {string}
          */
         EventStatus: "draft" | "open" | "locked" | "archived";
+        /** GeocodeRequest */
+        GeocodeRequest: {
+            /** Addresses */
+            addresses: string[];
+        };
+        /**
+         * GeocodeResponse
+         * @description Exactly one result per requested address, in the same order.
+         *
+         *     The client lines these up against roster rows, so a shorter list would shift every address after
+         *     a failure onto the wrong person.
+         */
+        GeocodeResponse: {
+            /** Results */
+            results: components["schemas"]["ResolutionRead"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -687,6 +750,19 @@ export interface components {
             /** Lng */
             lng: number | null;
         };
+        /** PlaceRead */
+        PlaceRead: {
+            /** Address */
+            address: string;
+            /** Confidence */
+            confidence: number | null;
+            /** Is Approximate */
+            is_approximate: boolean;
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+        };
         /** Readiness */
         Readiness: {
             /**
@@ -699,6 +775,17 @@ export interface components {
              * @enum {string}
              */
             status: "ready" | "degraded";
+        };
+        /**
+         * ResolutionRead
+         * @description One result, in the order asked for. `place` is null when nothing matched.
+         */
+        ResolutionRead: {
+            /** From Cache */
+            from_cache: boolean;
+            place: components["schemas"]["PlaceRead"] | null;
+            /** Query */
+            query: string;
         };
         /**
          * RosterRead
@@ -836,6 +923,11 @@ export interface components {
             pickup_address: string;
             /** Seq */
             seq: number;
+        };
+        /** SuggestionsResponse */
+        SuggestionsResponse: {
+            /** Suggestions */
+            suggestions: components["schemas"]["PlaceRead"][];
         };
         /** UnassignedRead */
         UnassignedRead: {
@@ -1455,6 +1547,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SolutionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    geocode_v1_geocode_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeocodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeocodeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    autocomplete_v1_geocode_autocomplete_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionsResponse"];
                 };
             };
             /** @description Validation Error */

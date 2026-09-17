@@ -249,6 +249,42 @@
         "title": "EventStatus",
         "type": "string"
       },
+      "GeocodeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "addresses": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 60,
+            "minItems": 1,
+            "title": "Addresses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "addresses"
+        ],
+        "title": "GeocodeRequest",
+        "type": "object"
+      },
+      "GeocodeResponse": {
+        "description": "Exactly one result per requested address, in the same order.\n\nThe client lines these up against roster rows, so a shorter list would shift every address after\na failure onto the wrong person.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ResolutionRead"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "GeocodeResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1034,6 +1070,46 @@
         "title": "PickupRead",
         "type": "object"
       },
+      "PlaceRead": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "is_approximate": {
+            "title": "Is Approximate",
+            "type": "boolean"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "title": "Lng",
+            "type": "number"
+          }
+        },
+        "required": [
+          "address",
+          "lat",
+          "lng",
+          "confidence",
+          "is_approximate"
+        ],
+        "title": "PlaceRead",
+        "type": "object"
+      },
       "Readiness": {
         "properties": {
           "database": {
@@ -1058,6 +1134,36 @@
           "database"
         ],
         "title": "Readiness",
+        "type": "object"
+      },
+      "ResolutionRead": {
+        "description": "One result, in the order asked for. `place` is null when nothing matched.",
+        "properties": {
+          "from_cache": {
+            "title": "From Cache",
+            "type": "boolean"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "place",
+          "from_cache"
+        ],
+        "title": "ResolutionRead",
         "type": "object"
       },
       "RosterRead": {
@@ -1308,6 +1414,22 @@
           "pickup_address"
         ],
         "title": "StopRead",
+        "type": "object"
+      },
+      "SuggestionsResponse": {
+        "properties": {
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceRead"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "suggestions"
+        ],
+        "title": "SuggestionsResponse",
         "type": "object"
       },
       "UnassignedRead": {
@@ -2354,6 +2476,93 @@
         "summary": "Activate Solution",
         "tags": [
           "solutions"
+        ]
+      }
+    },
+    "/v1/geocode": {
+      "post": {
+        "description": "Resolve a batch of complete addresses, cache-first.\n\nBatched because a pasted roster is the case that matters: forty addresses as forty requests is\nforty round trips and forty cache queries, against a provider limited to 100 calls a minute.",
+        "operationId": "geocode_v1_geocode_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeocodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Geocode",
+        "tags": [
+          "geocoding"
+        ]
+      }
+    },
+    "/v1/geocode/autocomplete": {
+      "get": {
+        "description": "Suggestions for a partial address.\n\n**Not cached.** `geocode_cache` is keyed by a full normalized address; a prefix is not one, and\nstoring every keystroke would fill the table with strings no one will ever look up again. The\naddress the coordinator actually picks is resolved through `POST /v1/geocode`, which is cached.",
+        "operationId": "autocomplete_v1_geocode_autocomplete_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 300,
+              "minLength": 3,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Autocomplete",
+        "tags": [
+          "geocoding"
         ]
       }
     }

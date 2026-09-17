@@ -19,7 +19,14 @@ from fastapi.responses import JSONResponse
 
 from carpool_api.config import get_settings
 from carpool_api.db import dispose_engine
-from carpool_api.routes import events, ops, optimizations, participants, solutions
+from carpool_api.routes import (
+    events,
+    geocoding,
+    ops,
+    optimizations,
+    participants,
+    solutions,
+)
 
 
 @asynccontextmanager
@@ -75,6 +82,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(ops.router)
     app.include_router(events.router)
+    app.include_router(geocoding.router)
     app.include_router(participants.router)
     app.include_router(optimizations.router)
     app.include_router(solutions.router)

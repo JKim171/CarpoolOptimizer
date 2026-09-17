@@ -16,11 +16,12 @@ dependencies = [
     "asyncpg>=0.30,<1",
     "alembic>=1.14,<2",
     "pydantic-settings>=2.7,<3",
+    # Runtime, not just test: the geocoding proxy calls openrouteservice (docs/design.md 4.4).
+    "httpx>=0.28,<1",
 ]
 
 [project.optional-dependencies]
 test = [
-    "httpx>=0.28,<1",
     "pytest-asyncio>=0.25,<2",
     "testcontainers[postgres]>=4,<5",
 ]
