@@ -1,17 +1,18 @@
 "use client";
 
 /**
- * The organizer's view of one event: the roster, and the map that verifies it.
+ * The organizer's view of one event: the roster, the map that verifies it, and the answer.
  *
- * The results view lands in the next slice. This page is already the one an organizer returns to,
- * so the roster lives here rather than on a screen of its own -- entering a roster and checking the
- * pins are two halves of the same task.
+ * All on one page rather than a screen each: entering a roster, checking the pins and reading the
+ * result are one task done in one sitting, and the loop between them is tight -- an absurd pin is
+ * usually spotted *because* the route it produces looks wrong.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 
+import { ResultsPanel } from "@/components/results/ResultsPanel";
 import { PickupMap } from "@/components/roster/PickupMap";
 import { AddParticipantForm } from "@/components/roster/AddParticipantForm";
 import { PasteRoster } from "@/components/roster/PasteRoster";
@@ -207,6 +208,19 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
               />
             </Panel>
           </section>
+
+          {/*
+            Last, after the roster and the ways of adding to it: inputs then output, which is both
+            reading order and the order the work happens in. It also keeps "add one person" within
+            reach of the table it appends to, rather than below a full set of results.
+          */}
+          <ResultsPanel
+            publicId={publicId}
+            venue={destination}
+            timeZone={event.data.timezone}
+            people={people}
+            onRosterChanged={refreshRoster}
+          />
         </>
       )}
     </Page>

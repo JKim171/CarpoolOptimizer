@@ -58,6 +58,21 @@ export function formatInZone(instant: Date, timeZone: string): string {
 }
 
 /**
+ * Clock time alone: "4:12 PM".
+ *
+ * For a list of stops, where the date is already established by the event above it and repeating it
+ * on every row buries the one number that differs. Still zone-aware -- the organizer may be looking
+ * at this from a different zone than the event is in, which is exactly the case that goes unnoticed.
+ */
+export function formatTimeInZone(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  }).format(instant);
+}
+
+/**
  * Every IANA zone this browser knows, for the picker.
  *
  * `supportedValuesOf` is the browser's own list, so it cannot drift from what `TZDate` accepts

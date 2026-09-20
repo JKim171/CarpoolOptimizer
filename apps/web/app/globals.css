@@ -23,6 +23,10 @@
   --accent-ink: #ffffff;
   --danger-surface: #fef2f2;
   --danger-ink: #991b1b;
+  /* Warn had ink only, which was enough while it was one line of text. The unassigned block is a
+     panel: people left without a ride have to be as visible as the cars that were filled. */
+  --warn-surface: #fffbeb;
+  --warn-line: #fcd34d;
   --warn-ink: #92400e;
 }
 
@@ -40,6 +44,8 @@
     --accent-ink: #0d0d0f;
     --danger-surface: #2a1213;
     --danger-ink: #fca5a5;
+    --warn-surface: #241a06;
+    --warn-line: #4d3a0d;
     --warn-ink: #fbbf24;
   }
 }
@@ -57,6 +63,8 @@
   --color-accent-ink: var(--accent-ink);
   --color-danger-surface: var(--danger-surface);
   --color-danger-ink: var(--danger-ink);
+  --color-warn-surface: var(--warn-surface);
+  --color-warn-line: var(--warn-line);
   --color-warn-ink: var(--warn-ink);
 
   --font-sans: var(--font-geist-sans);
