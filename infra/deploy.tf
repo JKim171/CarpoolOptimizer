@@ -103,10 +103,17 @@ resource "aws_iam_role_policy" "deploy" {
 
 # The one thing the deploy role may run.
 #
-# ImageTag is interpolated into a shell command, so allowedPattern is not
-# cosmetic validation — it is what stops a tag like `abc; rm -rf /` from
-# becoming a shell injection with root on the instance. Forty hex characters is
-# exactly a git commit SHA and nothing else.
+# The image is named by digest, never by tag. A GHCR tag can be overwritten by
+# anything allowed to push to the package — a workflow on another branch, which
+# the OIDC trust keeps out of AWS, or a leaked token — and the next deploy of
+# that tag would run whatever it now points at. A digest is the hash of the
+# image content, so it names one build and cannot be repointed. CI passes the
+# digest its own push returned.
+#
+# ImageDigest is interpolated into a shell command, so allowedPattern is not
+# cosmetic validation — it is what stops a value like `abc; rm -rf /` from
+# becoming a shell injection with root on the instance. The pattern admits a
+# sha256 digest and nothing else.
 resource "aws_ssm_document" "deploy" {
   name            = "carpool-deploy"
   document_type   = "Command"
@@ -114,12 +121,12 @@ resource "aws_ssm_document" "deploy" {
 
   content = yamlencode({
     schemaVersion = "2.2"
-    description   = "Pull the image for one commit SHA, migrate, and restart the app."
+    description   = "Pull one image by digest, migrate, and restart the app."
     parameters = {
-      ImageTag = {
+      ImageDigest = {
         type           = "String"
-        description    = "Git commit SHA of the image to deploy."
-        allowedPattern = "^[0-9a-f]{40}$"
+        description    = "Digest of the image to deploy, as returned by the push that built it."
+        allowedPattern = "^sha256:[0-9a-f]{64}$"
       }
     }
     mainSteps = [{
@@ -130,7 +137,7 @@ resource "aws_ssm_document" "deploy" {
         runCommand = [
           "set -euo pipefail",
           "cd ${var.app_dir}",
-          "export IMAGE_TAG='{{ ImageTag }}'",
+          "export IMAGE_DIGEST='{{ ImageDigest }}'",
           "docker compose pull api worker",
           "docker compose run --rm api alembic -c apps/api/alembic.ini upgrade head",
           "docker compose up -d --no-deps api worker",

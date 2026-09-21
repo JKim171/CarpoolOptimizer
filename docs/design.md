@@ -1034,10 +1034,11 @@ has OIDC, and the developer uses short-lived IAM Identity Center (SSO) sessions 
 
 **How a deploy runs.** CI builds the arm64 image and pushes it to GitHub's container registry
 (GHCR), tagged with the commit SHA. It then assumes the deploy role through OIDC and issues an SSM
-Run Command; the SSM agent on the instance — which holds an outbound connection to Systems Manager,
-so no inbound port is involved — pulls the image, runs migrations, and restarts the api and worker.
-CI waits for the command's exit status, so a failed deploy fails the workflow. Rolling back is the
-same command with the previous SHA.
+Run Command carrying the image **digest** its push returned; the SSM agent on the instance — which
+holds an outbound connection to Systems Manager, so no inbound port is involved — pulls the image by
+that digest, runs migrations, and restarts the api and worker. CI waits for the command's exit
+status, so a failed deploy fails the workflow. Rolling back is the same command with the previous
+digest, which each deploy run records in its summary.
 
 - **Build in CI, not on the instance.** A `t4g.small` would build slowly and spend the CPU credits
   the solver needs.
@@ -1048,9 +1049,14 @@ same command with the previous SHA.
 - **The deploy role can run exactly one thing.** AWS's stock `AWS-RunShellScript` document runs any
   command as root, so a role allowed to send it is effectively root on the instance. Instead,
   Terraform defines a custom SSM document that runs a fixed deploy script whose only parameter is
-  the image tag, validated against `^[0-9a-f]{40}$`, and the deploy role may send only that document,
-  only to this instance. A compromised workflow can at worst deploy another build of this
+  the image digest, validated against `^sha256:[0-9a-f]{64}$`, and the deploy role may send only that
+  document, only to this instance. A compromised workflow can at worst deploy another build of this
   repository.
+- **Deploy by digest, never by tag.** Tags in GHCR can be overwritten by anything allowed to push
+  to the package, including a workflow on a branch the OIDC trust keeps out of AWS. Deploying a tag
+  would run whatever it pointed at by then; a digest names one build's content. The SHA tag stays,
+  for people, but nothing deploys from it. Production compose therefore names its image as
+  `…@${IMAGE_DIGEST}`, the variable the deploy document exports.
 
 Rejected: SSH from CI (reopens port 22 and stores a private key in GitHub), an on-instance registry
 poller such as Watchtower (CI never learns whether the deploy worked, and migrations cannot be
