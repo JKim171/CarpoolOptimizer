@@ -94,6 +94,24 @@ class TestParsing:
         assert place.confidence == 0.0
         assert place.is_approximate is True
 
+    def test_autocomplete_judges_by_layer_because_it_carries_no_score(self):
+        # Real Pelias autocomplete omits `confidence` entirely (verified against ORS 2026-09-21).
+        unscored = {
+            "features": [
+                {
+                    "geometry": {"type": "Point", "coordinates": [LNG, LAT]},
+                    "properties": {"label": "somewhere", "layer": layer},
+                }
+                for layer in ("address", "locality")
+            ]
+        }
+
+        precise, coarse = _parse_features(unscored, scored=False)
+
+        assert precise.confidence is None
+        assert precise.is_approximate is False
+        assert coarse.is_approximate is True
+
     @pytest.mark.parametrize(
         "payload",
         [
@@ -123,15 +141,16 @@ class TestProviderCalls:
         assert request.url.params["api_key"] == "test-key"
         assert request.url.params["text"] == "123 Main St"
         assert request.url.params["boundary.country"] == "USA"
-        assert request.url.path == "/geocode/search"
+        assert request.url.path == "/pelias/v1/search"
 
     async def test_autocomplete_uses_its_own_endpoint(self):
         captured = []
-        geocoder = geocoder_returning({"features": [feature()]}, capture=captured)
+        geocoder = geocoder_returning({"features": [feature(confidence=None)]}, capture=captured)
 
-        await geocoder.autocomplete("123 Mai", limit=5)
+        [place] = await geocoder.autocomplete("123 Mai", limit=5)
 
-        assert captured[0].url.path == "/geocode/autocomplete"
+        assert captured[0].url.path == "/pelias/v1/autocomplete"
+        assert place.is_approximate is False
 
     async def test_a_missing_key_is_unavailable_not_a_crash(self):
         geocoder = OrsGeocoder(settings(ors_api_key=None))

@@ -59,8 +59,13 @@ class Place:
     is_approximate: bool
 
 
-def _parse_features(payload: object) -> list[Place]:
+def _parse_features(payload: object, *, scored: bool = True) -> list[Place]:
     """Read Pelias GeoJSON into `Place`s, skipping anything malformed.
+
+    `scored` is False for autocomplete, which Pelias answers without a `confidence` at all. There
+    the layer alone decides, and the score is reported as unknown rather than as zero -- otherwise
+    every suggestion is flagged approximate and the flag stops meaning anything. Search keeps the
+    strict reading, because a search result is what gets cached as precise.
 
     **Coordinates arrive as `[lng, lat]`.** A swap raises no error and produces no exception -- only
     drivers sent to the wrong place -- so the order is pinned by a test (docs/design.md 4.4).
@@ -88,21 +93,29 @@ def _parse_features(payload: object) -> list[Place]:
             continue
         if not isinstance(label, str):
             continue
-        confidence = properties.get("confidence")
-        confidence = float(confidence) if isinstance(confidence, int | float) else 0.0
+        raw = properties.get("confidence")
+        confidence: float | None = float(raw) if isinstance(raw, int | float) else None
+        if confidence is None and scored:
+            confidence = 0.0
         # Pelias `layer` says how coarse the match is. `address` and `venue` are precise enough to
         # pick someone up at; `locality` or `region` means it fell back to a town or a state.
         layer = properties.get("layer")
+        coarse = layer not in ("address", "venue")
         places.append(
             Place(
                 address=label,
                 lat=float(lat),
                 lng=float(lng),
                 confidence=confidence,
-                is_approximate=layer not in ("address", "venue") or confidence < LOW_CONFIDENCE,
+                is_approximate=coarse or (confidence is not None and confidence < LOW_CONFIDENCE),
             )
         )
     return places
+
+
+# api.heigit.org serves each backend under its own prefix: Pelias geocoding here, routing under
+# /openrouteservice. The bare /geocode/... paths exist only on the deprecated host; here they 404.
+_GEOCODE_PREFIX = "/pelias/v1"
 
 
 class OrsGeocoder:
@@ -120,7 +133,9 @@ class OrsGeocoder:
             params["boundary.country"] = self._settings.geocode_country
         return params
 
-    async def _get(self, path: str, params: dict[str, str | int]) -> list[Place]:
+    async def _get(
+        self, path: str, params: dict[str, str | int], *, scored: bool = True
+    ) -> list[Place]:
         timeout = self._settings.ors_timeout_seconds
         url = f"{self._settings.ors_base_url.rstrip('/')}{path}"
         try:
@@ -139,17 +154,19 @@ class OrsGeocoder:
             # message goes into logs and, for 503s, to the client.
             raise GeocodingUnavailable(f"the geocoder returned {response.status_code}")
         try:
-            return _parse_features(response.json())
+            return _parse_features(response.json(), scored=scored)
         except ValueError as exc:
             raise GeocodingUnavailable("the geocoder returned a malformed response") from exc
 
     async def search(self, text: str, *, limit: int) -> list[Place]:
         """Resolve a complete address. Best match first."""
-        return await self._get("/geocode/search", self._params(text=text, size=limit))
+        return await self._get(f"{_GEOCODE_PREFIX}/search", self._params(text=text, size=limit))
 
     async def autocomplete(self, text: str, *, limit: int) -> list[Place]:
         """Suggestions for a partial address, for a type-ahead."""
-        return await self._get("/geocode/autocomplete", self._params(text=text, size=limit))
+        return await self._get(
+            f"{_GEOCODE_PREFIX}/autocomplete", self._params(text=text, size=limit), scored=False
+        )
 
 
 async def _cached(session: AsyncSession, keys: list[str]) -> dict[str, GeocodeCache]:

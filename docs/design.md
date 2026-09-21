@@ -266,7 +266,9 @@ local OSRM. Production events are small enough for a free tier.
 **OpenRouteService, verified 2026-09-10.** `POST /v2/matrix/driving-car` with every point listed
 once (participants + destination) and no `sources`/`destinations` returns the full directed square
 matrix — one call covers both legs, since the return reads the destination's row. Base URL is
-`api.heigit.org`; `api.openrouteservice.org` is deprecated. Keep it in config, not code.
+`api.heigit.org`; `api.openrouteservice.org` is deprecated. Keep it in config, not code. The new host
+puts each backend under its own prefix — routing at `/openrouteservice/v2/...`, geocoding at
+`/pelias/v1/...` (verified 2026-09-21) — so the bare paths above 404 there.
 
 | Limit (free Standard plan) | Value | Consequence |
 |---|---|---|
