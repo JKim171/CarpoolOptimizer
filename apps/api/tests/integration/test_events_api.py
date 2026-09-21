@@ -348,3 +348,17 @@ async def test_ops_endpoints_are_reachable_alongside_the_event_router(
     """Mounting /v1/events must not shadow the unversioned ops paths."""
     assert (await api_client.get("/healthz")).status_code == 200
     assert (await api_client.get("/readyz")).json() == {"status": "ready", "database": "up"}
+
+
+async def test_event_creation_is_rate_limited_per_client(api_client: AsyncClient) -> None:
+    """Each event mints a token good for a roster and solves, so creation bounds disk use."""
+    from carpool_api.ratelimit import CREATE_EVENT
+
+    for _ in range(CREATE_EVENT.limit):
+        await create_event(api_client)
+
+    response = await api_client.post("/v1/events", json=payload())
+
+    assert response.status_code == 429
+    assert int(response.headers["retry-after"]) > 0
+    assert response.json()["detail"].startswith("Too many events created from this network")

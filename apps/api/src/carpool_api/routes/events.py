@@ -20,6 +20,7 @@ from carpool_api.db import get_session
 from carpool_api.errors import violates
 from carpool_api.geo import latitude_of, longitude_of, point
 from carpool_api.models import Event, EventStatus, EventToken, TokenKind
+from carpool_api.ratelimit import CREATE_EVENT, limit
 from carpool_api.schemas.events import (
     WEIGHTS_KEY,
     Destination,
@@ -68,7 +69,12 @@ async def _read(session: AsyncSession, event: Event) -> EventOrganizerRead:
     return EventOrganizerRead.of(event, destination.lat, destination.lng)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=EventCreated)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=EventCreated,
+    dependencies=[Depends(limit(CREATE_EVENT))],
+)
 async def create_event(
     payload: EventCreate,
     response: Response,

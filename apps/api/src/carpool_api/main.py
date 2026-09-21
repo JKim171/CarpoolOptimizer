@@ -6,8 +6,9 @@ load balancers and alarms should not have to track an API version.
 
 from __future__ import annotations
 
+import asyncio
 import math
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -15,10 +16,18 @@ from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from carpool_api.config import get_settings
 from carpool_api.db import dispose_engine
+from carpool_api.ratelimit import (
+    GENERAL,
+    SOLVE_CONCURRENCY,
+    RateLimited,
+    RateLimiter,
+    client_key,
+    too_many_requests,
+)
 from carpool_api.routes import (
     events,
     geocoding,
@@ -62,6 +71,28 @@ async def _validation_error(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
+async def _rate_limited(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RateLimited)
+    return too_many_requests(exc)
+
+
+async def _general_limit(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """The backstop limit on everything under /v1.
+
+    The ops endpoints are left out: health checks come from the container runtime, and a limit that
+    could fail them would turn load into restarts. A middleware's exception does not reach the
+    app's handlers, so the 429 is returned here rather than raised.
+    """
+    if request.url.path.startswith("/v1/"):
+        try:
+            request.app.state.rate_limiter.hit(GENERAL, client_key(request))
+        except RateLimited as exc:
+            return too_many_requests(exc)
+    return await call_next(request)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="CarpoolOptimizer API",
@@ -69,6 +100,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.add_exception_handler(RequestValidationError, _validation_error)
+    app.add_exception_handler(RateLimited, _rate_limited)
+    # On the app, not the module, so each app -- and each test -- starts with its own counters.
+    app.state.rate_limiter = RateLimiter()
+    app.state.solve_slots = asyncio.Semaphore(SOLVE_CONCURRENCY)
+    # Added before CORS, which makes CORS the outer layer: a 429 still carries the CORS headers a
+    # browser needs to read it, and preflights are answered before they are counted.
+    app.middleware("http")(_general_limit)
     # `allow_credentials=False` is deliberate. Every authenticated call carries an organizer token
     # in an `Authorization` header, so the browser never needs to attach a cookie -- and with no
     # credentials in play a mistaken origin cannot be used to ride an existing session. The token,

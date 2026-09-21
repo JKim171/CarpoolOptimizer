@@ -654,3 +654,60 @@ async def test_an_absurdly_large_weight_is_rejected(
         json={"weights": {"drive_time": 1e300}},
     )
     assert response.status_code == 422
+
+
+async def test_solves_are_rate_limited_per_event(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], monkeypatch
+) -> None:
+    """Only a solve that creates a job is charged; a reused answer runs nothing, costs nothing."""
+    from carpool_api.ratelimit import Rule
+
+    monkeypatch.setattr(
+        "carpool_api.routes.optimizations.SOLVES", Rule("solve", 1, 3600, "Too many optimizations")
+    )
+    await seed_roster(api_client, organizer_event)
+    await optimize(api_client, organizer_event)
+    # Unchanged roster: answered from the existing solution, and not refused.
+    await optimize(api_client, organizer_event, expect=200)
+
+    await add(api_client, organizer_event, person("Dee", "north"))
+    refused = await optimize(api_client, organizer_event, expect=429)
+
+    assert refused["detail"].startswith("Too many optimizations")
+    # Another event has its own allowance.
+    other = await other_event(api_client)
+    await seed_roster(api_client, other)
+    await optimize(api_client, other)
+
+
+async def test_no_more_than_two_solves_run_at_once(api_client: AsyncClient, monkeypatch) -> None:
+    """A burst queues for the two cores instead of every solve competing for them."""
+    import threading
+    import time
+
+    from carpool_api.ratelimit import SOLVE_CONCURRENCY
+    from carpool_domain import greedy
+
+    real_solve = greedy.solve
+    lock = threading.Lock()
+    running = 0
+    peak = 0
+
+    def slow_solve(instance):
+        nonlocal running, peak
+        with lock:
+            running += 1
+            peak = max(peak, running)
+        time.sleep(0.2)
+        with lock:
+            running -= 1
+        return real_solve(instance)
+
+    monkeypatch.setattr(greedy, "solve", slow_solve)
+    events = [await other_event(api_client) for _ in range(4)]
+    for event in events:
+        await seed_roster(api_client, event)
+
+    await asyncio.gather(*(optimize(api_client, event) for event in events))
+
+    assert peak == SOLVE_CONCURRENCY

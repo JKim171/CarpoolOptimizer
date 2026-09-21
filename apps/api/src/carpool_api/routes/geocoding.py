@@ -11,21 +11,22 @@ they expose is a proxied provider quota, not any event data: nothing here reads 
 participant, and an attacker learns only what the public geocoder would already tell them.
 
 What that costs is quota. The daily geocoding allowance (3,000/day, 100/min) is shared across the
-whole deployment, so an unauthenticated caller can exhaust it and stop roster entry working for
-everyone. **Rate limiting must therefore be in place before this reaches a public URL** -- which is
-already a launch gate (review H2, docs/design.md 2.4) and is why it is not improvised here.
+whole deployment, so an unauthenticated caller could exhaust it and stop roster entry working for
+everyone. Hence the per-client limits in `carpool_api.ratelimit`: lookups that reach the provider
+are counted per client per day, and autocomplete per minute.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from carpool_api.adapters.geocoding import GeocodingUnavailable, OrsGeocoder, resolve
 from carpool_api.config import Settings, get_settings
 from carpool_api.db import get_session
+from carpool_api.ratelimit import AUTOCOMPLETE, GEOCODE_LOOKUPS, Limiter, client_key, limit
 from carpool_api.schemas.geocoding import (
     MIN_QUERY,
     QUERY_MAX,
@@ -70,7 +71,12 @@ def _unavailable(exc: GeocodingUnavailable) -> HTTPException:
 
 @router.post("", response_model=GeocodeResponse)
 async def geocode(
-    body: GeocodeRequest, session: Session, settings: Config, geocoder: Geocoder
+    body: GeocodeRequest,
+    request: Request,
+    session: Session,
+    settings: Config,
+    geocoder: Geocoder,
+    limiter: Limiter,
 ) -> GeocodeResponse:
     """Resolve a batch of complete addresses, cache-first.
 
@@ -83,6 +89,8 @@ async def geocode(
             geocoder,
             body.addresses,
             ttl_seconds=settings.geocode_ttl_seconds,
+            # Charged once the cache has been read, for the lookups that will reach the provider.
+            spend=lambda lookups: limiter.hit(GEOCODE_LOOKUPS, client_key(request), lookups),
         )
     except GeocodingUnavailable as exc:
         raise _unavailable(exc) from exc
@@ -94,7 +102,11 @@ async def geocode(
     return GeocodeResponse(results=[ResolutionRead.of(item) for item in resolutions])
 
 
-@router.get("/autocomplete", response_model=SuggestionsResponse)
+@router.get(
+    "/autocomplete",
+    response_model=SuggestionsResponse,
+    dependencies=[Depends(limit(AUTOCOMPLETE))],
+)
 async def autocomplete(
     geocoder: Geocoder,
     q: Annotated[str, Query(min_length=MIN_QUERY, max_length=QUERY_MAX)],

@@ -262,3 +262,55 @@ class TestAutocomplete:
 
         async with sessionmaker() as session:
             assert (await session.execute(select(GeocodeCache))).scalars().all() == []
+
+
+class TestRateLimits:
+    async def test_only_lookups_that_reach_the_provider_are_charged(
+        self, geocoding_client, monkeypatch
+    ):
+        """Counted in provider lookups: cache hits and repeats within a batch are free."""
+        from carpool_api.ratelimit import Rule
+
+        monkeypatch.setattr(
+            "carpool_api.routes.geocoding.GEOCODE_LOOKUPS", Rule("geocode", 2, 86_400, "Limit")
+        )
+        client, stub, _ = geocoding_client
+
+        # Two distinct addresses, one repeated: two lookups, exactly the allowance.
+        first = await client.post("/v1/geocode", json={"addresses": ["1 A St", "1 A St", "2 B St"]})
+        # Both cached now, so this costs nothing even though the allowance is spent.
+        second = await client.post("/v1/geocode", json={"addresses": ["2 B St", "1 A St"]})
+
+        assert (first.status_code, second.status_code) == (200, 200)
+        assert stub.searches == ["1 A St", "2 B St"]
+
+    async def test_a_batch_over_the_allowance_is_refused_before_any_provider_call(
+        self, geocoding_client, monkeypatch
+    ):
+        from carpool_api.ratelimit import Rule
+
+        monkeypatch.setattr(
+            "carpool_api.routes.geocoding.GEOCODE_LOOKUPS", Rule("geocode", 2, 86_400, "Limit")
+        )
+        client, stub, sessionmaker = geocoding_client
+
+        response = await client.post(
+            "/v1/geocode", json={"addresses": ["1 A St", "2 B St", "3 C St"]}
+        )
+
+        assert response.status_code == 429
+        assert stub.searches == [], "a refused batch still spent provider quota"
+        async with sessionmaker() as session:
+            assert (await session.execute(select(GeocodeCache))).first() is None
+
+    async def test_autocomplete_is_rate_limited(self, geocoding_client):
+        from carpool_api.ratelimit import AUTOCOMPLETE
+
+        client, stub, _ = geocoding_client
+        for _ in range(AUTOCOMPLETE.limit):
+            assert (await client.get("/v1/geocode/autocomplete", params={"q": "1500 E"})).is_success
+
+        response = await client.get("/v1/geocode/autocomplete", params={"q": "1500 E"})
+
+        assert response.status_code == 429
+        assert len(stub.autocompletes) == AUTOCOMPLETE.limit

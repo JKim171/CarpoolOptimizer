@@ -111,7 +111,13 @@ public launch**, not polish — none is needed for club tennis, whose roster the
 - **Rate limits and per-event solve limits.** Without accounts, anyone can create events. The
   routing and geocoding quotas (§4.4) are one pool shared by every user, so one abusive client
   exhausting them is a routing outage for everyone. The 50 cap bounds per-event cost; rate limits
-  bound per-client cost; haversine is the fallback when quota runs out.
+  bound per-client cost; haversine is the fallback when quota runs out. **Built 2026-09-21**, as per-client
+  token buckets in the API (`carpool_api/ratelimit.py`): 10 event creations an hour and 300
+  provider geocoding lookups a day per IP, autocomplete 60 a minute, 20 solves an hour per event,
+  120 requests a minute per IP on everything under `/v1`, and at most two solves running at once.
+  Per-IP limits bound one client, not many; accounts are what close that, and they are not an MVP
+  feature. Rejected: rate limiting at Caddy, which needs a third-party plugin compiled into a
+  custom build and cannot see which event a request is for.
 - **Retention policy, a privacy page, and event deletion.** §5.3.2 defers retention until the
   address book exists; a public site holding strangers' home addresses cannot wait that long.
 - **Provider terms** confirmed to permit a free public website, not only personal/development use.
@@ -998,6 +1004,14 @@ Vercel (free) ──────► Caddy :443  ── auto TLS     EC2 t4g.smal
 
 Operator ── SSM Session Manager (no SSH port)     GitHub Actions ── OIDC role ──► deploy
 ```
+
+**What the rate limits (§1) require of this topology.** The counters live in the API process's
+memory, so the api runs as **one uvicorn process**; a second would give every client a second
+allowance, and scaling out means moving the counters to Postgres first. They are keyed by client
+IP, so uvicorn runs with `--proxy-headers --forwarded-allow-ips` naming **Caddy only**: trusting
+`X-Forwarded-For` from anyone lets every caller claim a fresh address, and trusting nobody puts
+every user behind Caddy's. Caddy caps request bodies (`request_body max_size 64KB`), which stock
+Caddy does without a plugin.
 
 **API and worker are separate processes, co-located on one machine.** This is the important
 distinction: the architecture is genuinely two-tier — independent process lifecycles, crash

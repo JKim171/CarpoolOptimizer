@@ -16,6 +16,7 @@ resolution is batched: a pasted roster is one request and one cache round trip r
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -251,6 +252,7 @@ async def resolve(
     addresses: list[str],
     *,
     ttl_seconds: int,
+    spend: Callable[[int], None] | None = None,
 ) -> list[Resolution]:
     """Resolve each address, reading the cache first and writing back what it had to fetch.
 
@@ -260,6 +262,11 @@ async def resolve(
     """
     keys = [normalize_address(address) for address in addresses]
     cached = await _cached(session, [key for key in keys if key])
+    if spend is not None:
+        # Before any provider call, and all at once, so a batch the caller cannot afford is refused
+        # whole instead of spending quota and then failing partway. Distinct addresses, because a
+        # repeat is served from what the first one cached.
+        spend(len({key for key in keys if key and key not in cached}))
 
     results: list[Resolution] = []
     for address, key in zip(addresses, keys, strict=True):

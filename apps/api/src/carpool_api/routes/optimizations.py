@@ -53,6 +53,7 @@ from carpool_api.db import get_session
 from carpool_api.errors import violates
 from carpool_api.geo import latitude_of, longitude_of
 from carpool_api.models import Event, JobStatus, OptimizationJob, Participant, Solution
+from carpool_api.ratelimit import SOLVES, Limiter, SolveSlots
 from carpool_api.schemas.events import weights_of
 from carpool_api.schemas.optimizations import JobConflict, JobRead, OptimizationCreate
 from carpool_api.schemas.weights import Weights
@@ -192,6 +193,8 @@ async def create_optimization(
     event: OrganizerEvent,
     session: Session,
     response: Response,
+    limiter: Limiter,
+    solve_slots: SolveSlots,
     payload: OptimizationCreate | None = None,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JobRead | JSONResponse:
@@ -223,6 +226,10 @@ async def create_optimization(
     if (solved := await _already_solved(session, event_id, fingerprint, input_version)) is not None:
         response.status_code = status.HTTP_200_OK
         return await _read(session, solved, public_id)
+
+    # Charged only here, where a job is about to be created: the replay and already-solved answers
+    # above run no solver and write nothing, so they cost nothing.
+    limiter.hit(SOLVES, str(event_id))
 
     # Before the insert, not after a 409: a wedged event has to heal on the next attempt rather
     # than stay wedged until someone notices.
@@ -287,11 +294,13 @@ async def create_optimization(
         )
 
     await session.commit()
-    await _run(session, event, job)
+    await _run(session, event, job, solve_slots)
     return await _read(session, job, public_id)
 
 
-async def _run(session: AsyncSession, event: Event, job: OptimizationJob) -> None:
+async def _run(
+    session: AsyncSession, event: Event, job: OptimizationJob, solve_slots: asyncio.Semaphore
+) -> None:
     """Solve the committed job and record the outcome, success or failure.
 
     The instance is rebuilt here rather than handed in, because the roster is read *after* the job
@@ -315,7 +324,10 @@ async def _run(session: AsyncSession, event: Event, job: OptimizationJob) -> Non
 
     try:
         loaded, _ = await _load(session, event, weights)
-        solution = await asyncio.to_thread(greedy.solve, loaded.instance)
+        # Only the solve itself holds a slot; loading and writing are I/O and do not compete for
+        # the two cores the slots stand for.
+        async with solve_slots:
+            solution = await asyncio.to_thread(greedy.solve, loaded.instance)
         violations = validate(loaded.instance, solution)
         if violations:
             # A solver may be heuristic about quality and never about feasibility (CLAUDE.md), so an
