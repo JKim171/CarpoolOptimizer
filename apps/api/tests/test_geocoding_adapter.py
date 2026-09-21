@@ -138,7 +138,8 @@ class TestProviderCalls:
         await geocoder.search("123 Main St", limit=1)
 
         [request] = captured
-        assert request.url.params["api_key"] == "test-key"
+        assert request.headers["Authorization"] == "test-key"
+        assert "test-key" not in str(request.url)
         assert request.url.params["text"] == "123 Main St"
         assert request.url.params["boundary.country"] == "USA"
         assert request.url.path == "/pelias/v1/search"

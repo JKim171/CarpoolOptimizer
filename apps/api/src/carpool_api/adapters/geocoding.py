@@ -125,10 +125,15 @@ class OrsGeocoder:
         self._settings = settings
         self._client = client
 
-    def _params(self, **extra: str | int) -> dict[str, str | int]:
+    def _headers(self) -> dict[str, str]:
+        # A header, not the `api_key` query parameter ORS also accepts: request URLs end up in
+        # logs (httpx writes them at INFO), and a key in the URL would go with them.
         if not self._settings.ors_api_key:
             raise GeocodingUnavailable("ORS_API_KEY is not configured")
-        params: dict[str, str | int] = {"api_key": self._settings.ors_api_key, **extra}
+        return {"Authorization": self._settings.ors_api_key}
+
+    def _params(self, **extra: str | int) -> dict[str, str | int]:
+        params: dict[str, str | int] = {**extra}
         if self._settings.geocode_country:
             params["boundary.country"] = self._settings.geocode_country
         return params
@@ -136,22 +141,25 @@ class OrsGeocoder:
     async def _get(
         self, path: str, params: dict[str, str | int], *, scored: bool = True
     ) -> list[Place]:
+        headers = self._headers()
         timeout = self._settings.ors_timeout_seconds
         url = f"{self._settings.ors_base_url.rstrip('/')}{path}"
         try:
             if self._client is not None:
-                response = await self._client.get(url, params=params, timeout=timeout)
+                response = await self._client.get(
+                    url, params=params, headers=headers, timeout=timeout
+                )
             else:
                 async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.get(url, params=params)
+                    response = await client.get(url, params=params, headers=headers)
         except httpx.HTTPError as exc:
             raise GeocodingUnavailable(f"could not reach the geocoder: {exc}") from exc
 
         if response.status_code == 429:
             raise GeocodingUnavailable("the geocoder's rate limit was reached; try again shortly")
         if response.status_code >= 400:
-            # The body can echo the query but never the key -- it is sent as a parameter and this
-            # message goes into logs and, for 503s, to the client.
+            # The body is never quoted: it can echo the request, and this message goes into logs
+            # and, for 503s, to the client.
             raise GeocodingUnavailable(f"the geocoder returned {response.status_code}")
         try:
             return _parse_features(response.json(), scored=scored)
