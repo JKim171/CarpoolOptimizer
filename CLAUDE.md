@@ -65,9 +65,17 @@ make db        # postgres + postgis via docker compose
 make api       # uvicorn on :8000
 make web       # next dev on :3000
 make openapi   # regenerate the API contract and the TypeScript types built from it
+make lock      # re-resolve requirements.txt, the hashed runtime lock, from requirements.in
+make audit     # known advisories against the locked runtime dependencies (needs the network)
 ```
 
-`make check` must pass before a commit. CI runs the same steps, in two jobs (`check` and `web`).
+`make check` must pass before a commit. CI runs the same steps, in two jobs (`check` and `web`),
+plus `make audit`.
+
+**Runtime dependencies install from the lock.** `requirements.txt` pins every third-party runtime
+package to an exact version and hash, and is installed with `--require-hashes` locally and in CI;
+the production image must do the same. After changing a dependency range in a `pyproject.toml`, run
+`make lock` and commit both files. Dev tools are pinned exactly in `requirements-dev.txt`.
 
 **The API contract is generated, not hand-written.** `apps/web/lib/api/schema.d.ts` comes from
 `apps/web/lib/api/openapi.json`, which comes from the Pydantic schemas. Change a route or a model

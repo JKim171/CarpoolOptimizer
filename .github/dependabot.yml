@@ -1,0 +1,25 @@
+# Version updates for everything pinned: the workflow's actions (pinned by SHA, which Dependabot
+# rewrites along with the release comment), the web app's npm lock, and the Python runtime lock.
+# Minor and patch bumps arrive as one grouped pull request per ecosystem, so a month of releases is
+# one review rather than twenty.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    groups:
+      actions: { patterns: ["*"] }
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule: { interval: monthly }
+    groups:
+      web-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: monthly }
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]

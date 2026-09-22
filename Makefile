@@ -1,9 +1,14 @@
-.PHONY: setup test lint fmt typecheck check db migrate revision api \
+.PHONY: setup hooks test lint fmt typecheck check audit lock db migrate revision api \
         web-setup web web-check openapi
 
+# Runtime dependencies come from the hashed lock, the local packages are installed on top without
+# resolving anything, and the dev tools last. CI installs in the same three steps.
 setup: web-setup hooks
 	python3 -m venv .venv
-	.venv/bin/pip install -q -U pip -r requirements-dev.txt -e packages/domain -e 'apps/api[test]'
+	.venv/bin/pip install -q -U pip
+	.venv/bin/pip install -q --require-hashes -r requirements.txt
+	.venv/bin/pip install -q --no-deps -e packages/domain -e apps/api
+	.venv/bin/pip install -q -r requirements-dev.txt
 
 # .git/hooks is not committed, so a fresh clone has no hooks until this runs.
 hooks:
@@ -31,6 +36,18 @@ web-check:
 	cd apps/web && npm run check
 
 check: lint typecheck test web-check
+
+# Known advisories against the pinned runtime dependencies. Needs the network, so it runs in CI and
+# on demand rather than inside `check`.
+audit:
+	.venv/bin/pip-audit --disable-pip --require-hashes -r requirements.txt
+
+# Re-resolve the runtime lock after changing a dependency in a pyproject.toml. Existing pins are
+# kept; `make lock LOCK_FLAGS=--upgrade` moves every pin to the newest release the ranges allow.
+lock:
+	.venv/bin/pip-compile -q --generate-hashes --strip-extras $(LOCK_FLAGS) \
+	  --unsafe-package carpool-api --unsafe-package carpool-domain \
+	  -o requirements.txt requirements.in
 
 db:
 	docker compose up -d --build postgres

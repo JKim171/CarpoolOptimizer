@@ -4,21 +4,35 @@ on:
   push: { branches: [main] }
   pull_request:
 
+# Every job starts from read-only access. A job that needs more -- the deploy's id-token and
+# packages grants -- asks for it in its own block, so no other job inherits it.
+permissions:
+  contents: read
+
 env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
-  # These steps mirror `make check`. The Makefile runs them out of .venv/; CI has its own
-  # environment, so the commands are spelled out rather than shelling into the Makefile.
+  # These steps mirror `make setup` and `make check`. The Makefile runs them out of .venv/; CI has
+  # its own environment, so the commands are spelled out rather than shelling into the Makefile.
+  # Actions are pinned by commit SHA, since a tag can be moved; the comment names the release.
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: pip
-      - run: pip install -U pip -r requirements-dev.txt -e packages/domain -e 'apps/api[test]'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: pip install -U pip
+      - run: pip install --require-hashes -r requirements.txt
+      - run: pip install --no-deps -e packages/domain -e apps/api
+      - run: pip install -r requirements-dev.txt
+      - run: pip check
+      - run: pip-audit --disable-pip --require-hashes -r requirements.txt
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy packages/domain/src apps/api/src
@@ -35,8 +49,8 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
           cache: npm

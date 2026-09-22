@@ -1,0 +1,9 @@
+# Input to the runtime lock. `make lock` compiles this into requirements.txt, which pins every
+# third-party package the API needs at run time to an exact version and its hashes.
+#
+# The two local packages are listed so the resolver reads their dependencies from the working tree,
+# and marked unsafe (see the Makefile) so they are left out of the output: a directory has no single
+# file to hash, and carpool-domain is not on PyPI, so it must never be resolved from there. They are
+# installed afterwards with --no-deps.
+-e ./packages/domain
+-e ./apps/api
