@@ -62,3 +62,38 @@ jobs:
       - run: npm run build
         env:
           NEXT_PUBLIC_API_BASE_URL: https://api.invalid
+
+  # Build the API image for the instance (Graviton, so arm64 -- built natively on an arm64 runner
+  # rather than emulated) and push it to GHCR. Only after both checks pass, and only for main.
+  # The digest the push returns is what a deploy names; the SHA tag is for people, and nothing
+  # deploys from it (docs/design.md 10.1).
+  image:
+    needs: [check, web]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # A docker-container builder, so the digest in the build metadata is the manifest that was
+      # pushed. The default driver can report the image config's digest, which does not pull.
+      - run: docker buildx create --use --driver docker-container --driver-opt image=moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
+      - run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: push
+        env:
+          IMAGE: ghcr.io/jkim171/carpooloptimizer
+        run: |
+          docker buildx build --push --platform linux/arm64 \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "$IMAGE:$GITHUB_SHA" --metadata-file meta.json .
+          digest=$(jq -r '."containerimage.digest"' meta.json)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker buildx imagetools inspect "$IMAGE@$digest" > /dev/null
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Built \`$IMAGE@$digest\` from \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
