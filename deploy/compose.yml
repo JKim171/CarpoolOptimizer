@@ -46,7 +46,10 @@ services:
       retries: 3
 
   postgres:
-    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE must name the PostGIS image}
+    # Built by .github/workflows/postgres-image.yml from docker/postgres. The digest is pinned here
+    # by hand from that run's summary, so a rebuilt database image reaches production only through
+    # a reviewed commit.
+    image: ghcr.io/jkim171/carpool-postgres:16@sha256:05e896b3cf348d91d50ba39691c03047566f8920766e2e17897cfa08f23a1a3e
     restart: unless-stopped
     environment:
       POSTGRES_USER: carpool

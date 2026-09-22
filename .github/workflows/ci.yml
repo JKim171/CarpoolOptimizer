@@ -97,3 +97,53 @@ jobs:
           docker buildx imagetools inspect "$IMAGE@$digest" > /dev/null
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "Built \`$IMAGE@$digest\` from \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+
+  # Deploy the digest the image job just pushed. Through OIDC, the job gets a short-lived role
+  # that can send one SSM document to one instance and read the result; there is no AWS key
+  # anywhere (docs/design.md 10.1). The workflow waits for the command, so a failed deploy fails
+  # the run, and the summary records the digest -- rolling back is this same command with the
+  # previous run's digest.
+  #
+  # No `environment:` on purpose: it would change the OIDC subject from the branch to the
+  # environment, and the role's trust policy names the branch.
+  deploy:
+    needs: [image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    # One deploy at a time, and a newer one waits rather than cancelling one mid-migration.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    env:
+      # From `terraform output` in infra/. Identifiers, not credentials.
+      AWS_REGION: us-east-1
+      INSTANCE_ID: i-0f43b22fbb6fa4973
+      DIGEST: ${{ needs.image.outputs.digest }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::238971168139:role/carpool-deploy
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run the deploy document and wait for it
+        run: |
+          echo "Deploying \`$DIGEST\`. To roll back, re-run the deploy document with the digest from an earlier run's summary." >> "$GITHUB_STEP_SUMMARY"
+          id=$(aws ssm send-command --document-name carpool-deploy --instance-ids "$INSTANCE_ID" \
+            --parameters "ImageDigest=$DIGEST" --comment "$GITHUB_SHA" \
+            --query Command.CommandId --output text)
+          # The stock waiter gives up after 100 s; a first pull and migration can take longer. The
+          # document's own timeout is 600 s, so this outlasts it.
+          for _ in $(seq 1 130); do
+            status=$(aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) sleep 5 ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          echo "SSM command \`$id\` finished: **$status**." >> "$GITHUB_STEP_SUMMARY"
+          [ "$status" = Success ]
+      # From outside, through Caddy and TLS: the same path a browser takes. The first request after
+      # a fresh certificate is issued can take a few seconds, hence the retries.
+      - name: Smoke test
+        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors https://api.whodriveswho.com/readyz
