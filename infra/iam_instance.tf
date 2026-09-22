@@ -72,3 +72,27 @@ resource "aws_iam_role_policy" "backups" {
     ]
   })
 }
+
+# Runtime configuration: read one parameter path, nothing else.
+#
+# The deploy writes .env from these (deploy.tf). SecureString values are
+# encrypted with the AWS-managed aws/ssm key, whose key policy already lets any
+# principal in the account decrypt through Parameter Store, so no KMS statement
+# is needed here — and none is granted, so the role cannot use that key for
+# anything but reading these parameters.
+resource "aws_iam_role_policy" "config" {
+  name = "carpool-config-read"
+  role = aws_iam_role.instance.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["ssm:GetParametersByPath"]
+      Resource = [
+        "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${var.parameter_path}",
+        "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${var.parameter_path}/*",
+      ]
+    }]
+  })
+}

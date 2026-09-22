@@ -84,6 +84,28 @@ variable "app_dir" {
   default     = "/opt/carpool"
 }
 
+variable "image_repository" {
+  description = "Where CI pushes the API image. GHCR names are lowercase, whatever the repository's case."
+  type        = string
+  default     = "ghcr.io/jkim171/carpooloptimizer"
+}
+
+variable "parameter_path" {
+  description = <<-EOT
+    Parameter Store path the deploy writes .env from: each parameter under it
+    becomes NAME=value. The values are set by hand (see docs), never by
+    Terraform, so no secret ever enters the state file.
+  EOT
+  type        = string
+  default     = "/carpool/prod"
+}
+
+variable "required_parameters" {
+  description = "Parameters a deploy refuses to proceed without."
+  type        = list(string)
+  default     = ["POSTGRES_PASSWORD", "ORS_API_KEY"]
+}
+
 variable "backup_retention_days" {
   description = <<-EOT
     How far back a restore can reach. Dumps are KB-to-low-MB, so this is a

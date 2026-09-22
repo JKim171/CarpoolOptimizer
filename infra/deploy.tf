@@ -114,6 +114,18 @@ resource "aws_iam_role_policy" "deploy" {
 # cosmetic validation — it is what stops a value like `abc; rm -rf /` from
 # becoming a shell injection with root on the instance. The pattern admits a
 # sha256 digest and nothing else.
+#
+# What a deploy does, in order:
+#   1. Pull the image by digest and copy its deploy/ directory (compose file,
+#      Caddyfile) into the project directory. The configuration therefore always
+#      comes from the build being deployed; nothing else writes it, and the
+#      digest stays the only parameter.
+#   2. Write .env from Parameter Store, plus IMAGE_DIGEST so that an operator's
+#      `docker compose` in a later session names the same image. Refuses to
+#      continue if a required secret is missing, rather than starting an API
+#      that fails at the first request.
+#   3. Migrate, then start or recreate whatever changed. Unchanged services —
+#      Postgres, almost always — are left running.
 resource "aws_ssm_document" "deploy" {
   name            = "carpool-deploy"
   document_type   = "Command"
@@ -121,7 +133,7 @@ resource "aws_ssm_document" "deploy" {
 
   content = yamlencode({
     schemaVersion = "2.2"
-    description   = "Pull one image by digest, migrate, and restart the app."
+    description   = "Pull one image by digest, install its deploy config, migrate, and restart the app."
     parameters = {
       ImageDigest = {
         type           = "String"
@@ -136,11 +148,24 @@ resource "aws_ssm_document" "deploy" {
         timeoutSeconds = "600"
         runCommand = [
           "set -euo pipefail",
+          "install -d -m 0750 ${var.app_dir}",
           "cd ${var.app_dir}",
-          "export IMAGE_DIGEST='{{ ImageDigest }}'",
-          "docker compose pull api worker",
+          "image='${var.image_repository}@{{ ImageDigest }}'",
+          "docker pull \"$image\"",
+          "cid=$(docker create \"$image\")",
+          "trap 'docker rm -f \"$cid\" >/dev/null' EXIT",
+          "rm -rf deploy.new",
+          "docker cp \"$cid:/app/deploy\" deploy.new",
+          "cp -a deploy.new/. .",
+          "rm -rf deploy.new",
+          "umask 077",
+          "aws ssm get-parameters-by-path --region ${var.region} --path ${var.parameter_path} --with-decryption --query 'Parameters[].[Name,Value]' --output text | awk -F '\t' '{ sub(\".*/\", \"\", $1); print $1 \"=\" $2 }' > .env.new",
+          "for key in ${join(" ", var.required_parameters)}; do grep -q \"^$key=\" .env.new || { echo \"missing parameter ${var.parameter_path}/$key\" >&2; exit 1; }; done",
+          "echo 'IMAGE_DIGEST={{ ImageDigest }}' >> .env.new",
+          "mv .env.new .env",
+          "docker compose pull --quiet",
           "docker compose run --rm api alembic -c apps/api/alembic.ini upgrade head",
-          "docker compose up -d --no-deps api worker",
+          "docker compose up -d --remove-orphans",
           "docker image prune -f",
         ]
       }
