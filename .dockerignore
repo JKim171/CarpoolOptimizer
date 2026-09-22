@@ -1,0 +1,10 @@
+# An allowlist: the build context is only what the image needs. Excluding by pattern instead would
+# let a new file -- .env above all -- reach the context, and from there an image that is public.
+*
+!requirements.txt
+!packages/domain/src
+!apps/api/src
+!apps/api/alembic.ini
+!apps/api/alembic
+!deploy
+**/__pycache__

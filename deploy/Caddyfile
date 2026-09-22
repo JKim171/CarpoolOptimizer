@@ -1,0 +1,13 @@
+# TLS is automatic once SITE_ADDRESS is a domain name; until then it is ":80" and Caddy serves
+# plain HTTP (deploy/compose.yml).
+{$SITE_ADDRESS}
+
+# The largest legitimate request is a 50-person roster, a few kilobytes of JSON. The cap stops a
+# multi-megabyte body before the API reads and parses it (docs/design.md 10.1).
+request_body {
+	max_size 64KB
+}
+
+# Caddy ignores X-Forwarded-For from clients it does not trust -- by default, all of them -- and
+# sends the connecting address instead, which is what the API's rate limits key on.
+reverse_proxy api:8000

@@ -1,0 +1,77 @@
+# Production stack on the instance (docs/design.md 10.1). The deploy copies this directory out of
+# the image being deployed into the compose project directory, beside a .env holding the values
+# referenced below. Development uses the docker-compose.yml at the repository root instead.
+
+name: carpool
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine@sha256:de23def33b17fb5d1290b0f6c2add1d70780e52341896c00a4c8a2a2fe9d355e
+    restart: unless-stopped
+    # The one published service, on every interface on purpose: it is the public entry point, and
+    # the security group admits 80 and 443 only. Nothing else in this file publishes a port.
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # issued certificates; losing them means re-issuing against rate limits
+      - caddy_config:/config
+    networks:
+      edge:
+        ipv4_address: 172.28.0.10
+    depends_on: [api]
+
+  api:
+    image: ghcr.io/jkim171/carpooloptimizer@${IMAGE_DIGEST:?IMAGE_DIGEST must name the image to run}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://carpool:${POSTGRES_PASSWORD:?}@postgres:5432/carpool
+      ENVIRONMENT: production
+      # Caddy's fixed address above. Trusting X-Forwarded-For from anyone else would let every
+      # caller claim a fresh address and a fresh rate-limit allowance.
+      FORWARDED_ALLOW_IPS: 172.28.0.10
+    networks: [edge, db]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE must name the PostGIS image}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: carpool
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: carpool
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    # No published port, and only on the internal network: nothing outside the api container can
+    # reach it, including Caddy.
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carpool"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  # A fixed subnet so Caddy's address can be written down above.
+  edge:
+    ipam:
+      config: [{ subnet: 172.28.0.0/24 }]
+  # internal: no route out, so postgres has no egress at all.
+  db:
+    internal: true
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

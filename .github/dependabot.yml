@@ -1,5 +1,6 @@
 # Version updates for everything pinned: the workflow's actions (pinned by SHA, which Dependabot
-# rewrites along with the release comment), the web app's npm lock, and the Python runtime lock.
+# rewrites along with the release comment), the web app's npm lock, the Python runtime lock, and the
+# container images.
 # Minor and patch bumps arrive as one grouped pull request per ecosystem, so a month of releases is
 # one review rather than twenty.
 version: 2
@@ -23,3 +24,12 @@ updates:
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+
+  # Base images are pinned by digest, which only moves when something moves it.
+  - package-ecosystem: docker
+    directories: [/, /docker/postgres]
+    schedule: { interval: monthly }
+
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule: { interval: monthly }

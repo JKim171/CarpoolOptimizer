@@ -27,7 +27,9 @@ credential.
   **superuser**, whose password is published in this public repository, on every network the
   machine joins. Docker publishes ports through its own forwarding rules, which bypass the host
   firewall. Never reuse that pattern for anything reachable from outside the machine, and never
-  drop the `127.0.0.1:` prefix from a published port.
+  drop the `127.0.0.1:` prefix from a published port. The single exception is Caddy in
+  `deploy/compose.yml`, which is the public entry point by design; nothing else there publishes a
+  port, and Postgres sits on an internal network Caddy cannot reach.
 
 - Terraform state (`*.tfstate*`, `.terraform/`) is never committed — it can hold secrets in plain
   text. It lives in the S3 backend.
