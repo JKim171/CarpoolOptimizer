@@ -60,12 +60,17 @@ variable "cpu_credit_alarm_threshold" {
 
 variable "github_repository" {
   description = <<-EOT
-    owner/repo exactly as GitHub spells it, including case. This is half of the
-    OIDC trust boundary: it is what stops any other repository's workflow from
-    assuming the deploy role.
+    owner/repo as it appears in the OIDC subject claim. The repository uses
+    GitHub's immutable subject, so each half carries its numeric ID
+    (owner@id/repo@id): a repository deleted and re-created under the same
+    name, or a renamed account's name taken by someone else, gets a subject
+    that does not match. Read the current prefix with
+    `gh api repos/{owner}/{repo}/actions/oidc/customization/sub`. This is half
+    of the OIDC trust boundary: it is what stops any other repository's
+    workflow from assuming the deploy role.
   EOT
   type        = string
-  default     = "JKim171/CarpoolOptimizer"
+  default     = "JKim171@110058814/CarpoolOptimizer@1361182108"
 }
 
 variable "deploy_branch" {
