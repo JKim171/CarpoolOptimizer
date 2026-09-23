@@ -17,6 +17,17 @@ updates:
     groups:
       web-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # eslint-config-next decides which eslint major this app can use, so the bump arrives with
+      # it rather than on its own -- eslint 10 alone breaks the config's react rules.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      # Type definitions track the runtime, which is Node 24 in CI and on Vercel (engines.node).
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+      # A TypeScript major is a language change, not a dependency refresh. Taken deliberately.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: pip
     directory: /
@@ -29,6 +40,11 @@ updates:
   - package-ecosystem: docker
     directories: [/, /docker/postgres]
     schedule: { interval: monthly }
+    ignore:
+      # A Postgres major is a data migration (pg_upgrade or dump/restore) and a matching
+      # postgresql-NN-postgis-3 package, not an image bump. It happens on purpose or not at all.
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: docker-compose
     directory: /deploy
