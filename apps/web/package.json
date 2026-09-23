@@ -27,8 +27,8 @@
     "maplibre-gl": "^6.10.0",
     "next": "16.3.5",
     "openapi-fetch": "0.17.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -38,7 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "openapi-typescript": "7.13.0",
-    "prettier": "3.8.2",
+    "prettier": "3.9.8",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.1"
