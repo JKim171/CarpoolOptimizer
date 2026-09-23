@@ -251,7 +251,7 @@ async def test_a_cancelled_participant_still_renders_in_an_earlier_solution(
 async def test_solution_endpoints_require_the_organizer_token(
     api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
 ) -> None:
-    public_id, headers = organizer_event
+    public_id, _headers = organizer_event
     await seed_roster(api_client, organizer_event)
     job = await optimize(api_client, organizer_event)
 

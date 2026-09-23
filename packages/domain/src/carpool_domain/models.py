@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from itertools import pairwise
 
 #: Sentinel node for the shared event destination. Every route begins or ends here.
@@ -22,7 +22,7 @@ NodeId = str
 EARTH_RADIUS_M = 6_371_000.0
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     """How a participant gets to the event.
 
     `EITHER` -- has a car but is willing to ride instead -- is implemented and tested but not

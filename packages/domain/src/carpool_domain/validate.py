@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from .models import ProblemInstance, Route, Solution, outbound_schedule
 from .objective import route_metrics
@@ -23,7 +23,7 @@ class Violation:
     driver_id: str | None = None
 
 
-class Constraint(str, Enum):
+class Constraint(StrEnum):
     """The classes of rule a single route can break.
 
     Named as a closed set so that "why is this route infeasible" and "why could nobody take this

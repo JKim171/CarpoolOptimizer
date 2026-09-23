@@ -524,7 +524,7 @@ async def test_an_expired_lease_is_reclaimed_so_the_event_is_not_wedged(
 
     Simulated by backdating the lease rather than by killing a process, which is the same state.
     """
-    public_id, headers = organizer_event
+    public_id, _headers = organizer_event
     await seed_roster(api_client, organizer_event)
 
     async with engine.begin() as conn:

@@ -209,7 +209,7 @@ async def create_optimization(
     event_id, public_id = event.id, event.public_id
     input_version = event.participants_version
 
-    loaded, rows = await _load(session, event, weights)
+    _loaded, rows = await _load(session, event, weights)
     fingerprint = input_fingerprint(event, rows, algorithm=request.algorithm, weights=weights)
 
     if idempotency_key is not None:

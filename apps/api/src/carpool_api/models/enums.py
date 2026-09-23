@@ -14,19 +14,19 @@ from __future__ import annotations
 import enum
 
 
-class EventStatus(str, enum.Enum):
+class EventStatus(enum.StrEnum):
     DRAFT = "draft"
     OPEN = "open"
     LOCKED = "locked"
     ARCHIVED = "archived"
 
 
-class TokenKind(str, enum.Enum):
+class TokenKind(enum.StrEnum):
     ORGANIZER = "organizer"
     JOIN = "join"
 
 
-class ParticipantRole(str, enum.Enum):
+class ParticipantRole(enum.StrEnum):
     DRIVER = "driver"
     PASSENGER = "passenger"
     #: Dormant by decision, not dead code -- the MVP roster UI does not offer it (CLAUDE.md,
@@ -34,12 +34,12 @@ class ParticipantRole(str, enum.Enum):
     EITHER = "either"
 
 
-class ParticipantStatus(str, enum.Enum):
+class ParticipantStatus(enum.StrEnum):
     ACTIVE = "active"
     CANCELLED = "cancelled"
 
 
-class GeocodeSource(str, enum.Enum):
+class GeocodeSource(enum.StrEnum):
     #: Resolved by the geocoding provider; cached with a TTL, never a permanent store.
     PROVIDER = "provider"
     #: Placed by a human dragging a pin, so it is not provider output and may be kept permanently
@@ -47,13 +47,13 @@ class GeocodeSource(str, enum.Enum):
     USER = "user"
 
 
-class PrecisionLevel(str, enum.Enum):
+class PrecisionLevel(enum.StrEnum):
     EXACT = "exact"
     STREET = "street"
     NEIGHBORHOOD = "neighborhood"
 
 
-class JobStatus(str, enum.Enum):
+class JobStatus(enum.StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
@@ -61,6 +61,6 @@ class JobStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class RouteLeg(str, enum.Enum):
+class RouteLeg(enum.StrEnum):
     OUTBOUND = "outbound"
     RETURN = "return"

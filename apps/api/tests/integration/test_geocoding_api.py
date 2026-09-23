@@ -83,7 +83,7 @@ async def clean_cache(engine):
 
 class TestResolution:
     async def test_an_address_resolves_and_is_cached(self, geocoding_client):
-        client, stub, sessionmaker = geocoding_client
+        client, _stub, sessionmaker = geocoding_client
 
         response = await client.post("/v1/geocode", json={"addresses": [ADDRESS]})
 
@@ -166,7 +166,7 @@ class TestApproximateMatches:
             assert (await session.execute(select(GeocodeCache))).scalars().all() == []
 
     async def test_a_cache_hit_never_claims_a_confidence_it_did_not_measure(self, geocoding_client):
-        client, stub, _ = geocoding_client
+        client, _stub, _ = geocoding_client
 
         await client.post("/v1/geocode", json={"addresses": [ADDRESS]})
         response = await client.post("/v1/geocode", json={"addresses": [ADDRESS]})
