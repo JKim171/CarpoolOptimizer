@@ -30,8 +30,7 @@ export function isTerminal(status: JobStatus): boolean {
  * one instead. Retrying would hit the same partial unique index and fail again.
  */
 export type StartResult =
-  | { kind: "job"; job: Job }
-  | { kind: "conflict"; existingJobId: string | null; detail: string };
+  { kind: "job"; job: Job } | { kind: "conflict"; existingJobId: string | null; detail: string };
 
 type JobConflict = components["schemas"]["JobConflict"];
 
