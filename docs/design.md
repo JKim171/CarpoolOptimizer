@@ -1136,6 +1136,16 @@ AWS account with the thing they back up. At this scale, versioning covers accide
 off-AWS copy would reintroduce a stored credential. The job runs from the first real event, and at
 least one restore is rehearsed before the project is presented.
 
+The dump and the tool that reads it back ship in the image's `deploy/` directory, so the script, the
+schema it dumps, and the code are always from one build — the same property the compose file and
+Caddyfile have. A `systemd` timer installed by the deploy runs `backup.sh` nightly; it takes a
+custom-format `pg_dump` inside the Postgres container, checks the archive's table of contents there,
+and uploads it under a timestamped key that is never reused, so retention is the bucket's lifecycle
+rule to decide and not the writer's. `restore.sh` reads the other direction, and defaults to
+restoring into a scratch database and reporting row counts rather than touching the live one:
+replacing production is a separate, explicitly confirmed mode. A backup that has never been read
+back is an assumption, not a copy.
+
 ### Deferred infrastructure, and its trigger
 
 | Deferred | Add when |

@@ -1,0 +1,23 @@
+[Unit]
+# The nightly pg_dump. Installed by the deploy (infra/deploy.tf), which
+# substitutes @APP_DIR@ and writes the EnvironmentFile below, so the bucket name
+# and the compose directory come from Terraform rather than being repeated here.
+Description=Nightly pg_dump of the carpool database to S3
+Documentation=https://github.com/JKim171/CarpoolOptimizer
+# The dump runs through `docker compose exec`, so there is nothing to do before
+# the Docker daemon is up. Requires= rather than Wants= because a run without
+# Docker cannot produce a backup, and should fail rather than appear to succeed.
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/carpool/backup.env
+ExecStart=@APP_DIR@/backup.sh
+# A dump of this database takes seconds; ten minutes is the point at which
+# something is wrong and the run should be killed rather than left holding the
+# lock against tomorrow's.
+TimeoutStartSec=600
+# Root because it drives the Docker socket. Everything it writes is created
+# under umask 077 by the script itself.
+User=root

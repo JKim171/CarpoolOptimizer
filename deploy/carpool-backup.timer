@@ -1,0 +1,19 @@
+[Unit]
+Description=Nightly carpool database backup
+Documentation=https://github.com/JKim171/CarpoolOptimizer
+
+[Timer]
+# 08:00 UTC is roughly 3-4am US Eastern, which is the quiet end of the day for a
+# US carpool app (docs/design.md 2.4) -- a dump taken mid-practice would be a
+# snapshot of a roster being edited.
+OnCalendar=*-*-* 08:00:00 UTC
+# The box is a burstable t4g.small. The jitter matters less for load than for
+# not hammering S3 at a round number alongside everyone else's cron.
+RandomizedDelaySec=15m
+# If the instance was stopped or rebooting at 08:00, run as soon as it is back
+# instead of skipping the night. For the only off-machine copy of the data, a
+# late backup beats a missing one.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
