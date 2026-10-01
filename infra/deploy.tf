@@ -170,22 +170,39 @@ resource "aws_ssm_document" "deploy" {
           # The nightly backup's configuration and schedule, reinstalled on
           # every deploy so the units always match the scripts in the image
           # beside them. Nothing here is secret: a bucket name and a path.
-          "install -d -m 0755 /etc/carpool",
-          "printf 'APP_DIR=%s\\nBACKUP_BUCKET=%s\\nAWS_REGION=%s\\n' '${var.app_dir}' '${aws_s3_bucket.backups.bucket}' '${var.region}' > /etc/carpool/backup.env",
-          # @APP_DIR@ rather than a hardcoded path in the unit: var.app_dir is
-          # the single source of truth for where the project lives.
-          "for unit in carpool-backup.service carpool-backup.timer; do sed 's|@APP_DIR@|${var.app_dir}|g' \"${var.app_dir}/$unit\" > \"/etc/systemd/system/$unit\"; done",
-          # The umask above is 077, which systemd complains about on unit files.
-          # These carry no secrets, so give them the usual mode explicitly
-          # rather than changing the umask and affecting everything after it.
-          "chmod 0644 /etc/carpool/backup.env /etc/systemd/system/carpool-backup.service /etc/systemd/system/carpool-backup.timer",
-          "systemctl daemon-reload",
-          "systemctl enable --now carpool-backup.timer",
-          # Fail the deploy if the timer is not actually scheduled. Enabling a
-          # unit that cannot start is otherwise silent, and a backup nobody
-          # noticed was never running is the failure this whole slice exists to
-          # prevent.
-          "systemctl is-active --quiet carpool-backup.timer",
+          #
+          # Guarded on the units existing, because a ROLLBACK deploys an older
+          # digest -- and an image built before the backup slice has no unit
+          # files. Failing here would mean this installer could block the
+          # emergency path, so a digest that predates it leaves whatever timer
+          # is already on the box alone and says so. When the units ARE present,
+          # every step below is still fatal.
+          <<-INSTALL_BACKUP
+            if [ -f '${var.app_dir}/carpool-backup.service' ]; then
+              install -d -m 0755 /etc/carpool
+              printf 'APP_DIR=%s\nBACKUP_BUCKET=%s\nAWS_REGION=%s\n' '${var.app_dir}' '${aws_s3_bucket.backups.bucket}' '${var.region}' > /etc/carpool/backup.env
+              # @APP_DIR@ rather than a hardcoded path in the unit: var.app_dir
+              # is the single source of truth for where the project lives.
+              for unit in carpool-backup.service carpool-backup.timer; do
+                sed 's|@APP_DIR@|${var.app_dir}|g' "${var.app_dir}/$unit" > "/etc/systemd/system/$unit"
+              done
+              # The umask above is 077, which systemd complains about on unit
+              # files. These carry no secrets, so set the usual mode explicitly
+              # rather than changing the umask for everything after it.
+              chmod 0644 /etc/carpool/backup.env /etc/systemd/system/carpool-backup.service /etc/systemd/system/carpool-backup.timer
+              systemctl daemon-reload
+              systemctl enable --now carpool-backup.timer
+              # Fail the deploy if the timer did not actually arm. Enabling a
+              # unit that cannot start is otherwise silent, and a backup nobody
+              # noticed was never running is the failure this slice exists to
+              # prevent.
+              systemctl is-active --quiet carpool-backup.timer
+              echo "backup timer armed: $(systemctl show -p NextElapseUSecRealtime --value carpool-backup.timer)"
+            else
+              echo "this image predates the backup slice; leaving any existing carpool-backup.timer as it is"
+            fi
+          INSTALL_BACKUP
+          ,
         ]
       }
     }]
