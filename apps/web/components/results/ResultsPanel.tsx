@@ -18,7 +18,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import { Button, Notice, Problem, SectionHeading } from "@/components/ui/controls";
+import { Bleed, Button, Notice, Problem, Rule, SectionHeading } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import {
   describeJob,
@@ -190,19 +190,22 @@ export function ResultsPanel({
   );
 
   return (
-    <section className="flex flex-col gap-4">
-      <SectionHeading
-        title="Who drives whom"
-        meta={job.data ? describeJob(job.data) : undefined}
-        actions={
-          <Button onClick={() => start.mutate()} disabled={busy || people.length === 0}>
-            {solution.data ? "Re-optimize" : "Work out the carpools"}
-          </Button>
-        }
-      />
+    <section className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
+        <Rule />
+        <SectionHeading
+          title="Who drives whom"
+          meta={job.data ? describeJob(job.data) : undefined}
+          actions={
+            <Button onClick={() => start.mutate()} disabled={busy || people.length === 0}>
+              {solution.data ? "Re-optimize" : "Work out the carpools"}
+            </Button>
+          }
+        />
+      </div>
 
       {people.length === 0 && (
-        <p className="text-sm text-ink-muted">Add people to the roster first.</p>
+        <p className="text-[15px] text-ink-muted">Add people to the roster first.</p>
       )}
 
       {conflict && <Problem>{conflict}</Problem>}
@@ -225,13 +228,11 @@ export function ResultsPanel({
             </Notice>
           )}
 
-          <ResultSummary routes={routes} unassigned={solution.data.unassigned} />
-
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div
               role="group"
               aria-label="Which leg to show"
-              className="inline-flex overflow-hidden rounded-md border border-line"
+              className="inline-flex overflow-hidden rounded-[2px] border border-line-strong"
             >
               {(["outbound", "inbound"] as const).map((choice) => (
                 <button
@@ -239,10 +240,10 @@ export function ResultsPanel({
                   type="button"
                   onClick={() => setLeg(choice)}
                   aria-pressed={leg === choice}
-                  className={`px-3 py-1.5 text-xs font-medium ${
+                  className={`px-4 py-1.5 text-sm transition-colors ${
                     leg === choice
                       ? "bg-accent text-accent-ink"
-                      : "bg-surface-raised text-ink hover:bg-surface-sunken"
+                      : "text-ink hover:bg-surface-sunken"
                   }`}
                 >
                   {choice === "outbound" ? "There" : "Back"}
@@ -251,7 +252,7 @@ export function ResultsPanel({
             </div>
 
             {solution.data.is_active ? (
-              <span className="text-xs text-ink-muted">This is the active plan.</span>
+              <span className="text-sm italic text-ink-muted">This is the active plan.</span>
             ) : (
               <Button
                 variant="quiet"
@@ -272,64 +273,63 @@ export function ResultsPanel({
           )}
 
           {/*
-            Two columns from `lg`: the cards scroll, the map stays.
+            The map runs the full width of the window, and it is the largest thing on the screen.
 
-            Checking one car against the picture used to mean scrolling the map off screen and back,
-            and the answer to "does this ordering make sense" is exactly the comparison that costs.
-            `items-start` is what lets the map be `sticky` -- a stretched grid item is already as
-            tall as the row and has nothing to stick within.
+            It was a frame the width of a column of text, which made the one element here that
+            rewards size into a thumbnail -- and the map is where "does this ordering make sense"
+            is actually answered. Everything else on this page is read, and reading wants a measure,
+            so the map is the only thing that breaks out of it.
 
-            The map keeps its place in source order, so the single-column stack below `lg` is still
-            map-then-cards: on a phone the picture is the orientation you want before a list that
-            runs past the fold. `lg:order-2` moves it right, where the authoritative list reads
-            first -- "the list decides, the map verifies".
+            `65vh` rather than a fixed height: on a laptop it fills most of the fold, and on a
+            phone it stays a picture rather than becoming a page of its own that has to be scrolled
+            past before the list starts.
           */}
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <Bleed>
             <RouteMap
               routes={mapped}
               venue={venue}
               leg={leg}
               highlightedRouteId={highlightedRouteId}
-              // `100vh-9rem` leaves room for the sticky offset and the two-line caption under the
-              // frame, so the whole thing stays reachable: a sticky block taller than the viewport
-              // has a bottom edge you can never scroll to.
-              className="h-96 lg:sticky lg:top-6 lg:order-2 lg:h-[calc(100vh-9rem)] lg:max-h-[42rem]"
+              className="h-[65vh] min-h-80"
+              square
             />
+          </Bleed>
 
-            <div className="flex flex-col gap-3 lg:order-1">
-              {routes.map((route, index) => (
-                <RouteCard
-                  key={route.id}
-                  route={route}
-                  index={index}
-                  leg={leg}
-                  timeZone={timeZone}
-                  drivers={drivers}
-                  pinnedBy={pinnedBy}
-                  onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
-                  pinBusy={pin.isPending}
-                  directionsHref={directionsFor(route)}
-                  highlighted={highlightedRouteId === route.id}
-                  onHighlight={setHighlightedRouteId}
-                />
-              ))}
+          <ResultSummary routes={routes} unassigned={solution.data.unassigned} />
 
-              <UnassignedList
-                unassigned={solution.data.unassigned}
+          <div className="flex flex-col">
+            {routes.map((route, index) => (
+              <RouteCard
+                key={route.id}
+                route={route}
+                index={index}
+                leg={leg}
+                timeZone={timeZone}
                 drivers={drivers}
                 pinnedBy={pinnedBy}
                 onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
                 pinBusy={pin.isPending}
+                directionsHref={directionsFor(route)}
+                highlighted={highlightedRouteId === route.id}
+                onHighlight={setHighlightedRouteId}
               />
-
-              {routes.length === 0 && solution.data.unassigned.length > 0 && (
-                <p className="text-sm text-ink-muted">
-                  No cars were formed. Nobody on this roster is marked as driving, or no driver has
-                  a free seat.
-                </p>
-              )}
-            </div>
+            ))}
           </div>
+
+          <UnassignedList
+            unassigned={solution.data.unassigned}
+            drivers={drivers}
+            pinnedBy={pinnedBy}
+            onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
+            pinBusy={pin.isPending}
+          />
+
+          {routes.length === 0 && solution.data.unassigned.length > 0 && (
+            <p className="text-[15px] text-ink-muted">
+              No cars were formed. Nobody on this roster is marked as driving, or no driver has a
+              free seat.
+            </p>
+          )}
         </>
       )}
     </section>

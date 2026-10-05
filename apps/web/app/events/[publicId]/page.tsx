@@ -89,7 +89,7 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
   return (
     <Page>
       <div>
-        <Link href="/" className="text-sm text-accent hover:underline">
+        <Link href="/" className="text-sm text-accent underline underline-offset-2">
           ← All events
         </Link>
       </div>
@@ -116,10 +116,8 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
               and the arrival time -- "Status: open" is not a third of what this header has to say.
               As chips beside the title they are available without competing.
             */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-                {event.data.name}
-              </h1>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+              <h1 className="font-display text-4xl text-ink sm:text-5xl">{event.data.name}</h1>
               <Badge mono>{publicId}</Badge>
               <Badge>{event.data.status}</Badge>
               <Badge>
@@ -127,10 +125,16 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
               </Badge>
             </div>
             {/*
-              Three cells, not six. The time zone was its own row and is redundant: `formatInZone`
-              already prints the abbreviation on both times, which is the form anybody reads it in.
+              Three cells, not six, and divided by rules rather than boxed. The time zone was its
+              own cell and is redundant: `formatInZone` already prints the abbreviation on both
+              times, which is the form anybody reads it in.
             */}
-            <dl className="grid gap-5 rounded-lg border border-line bg-surface-raised p-5 sm:grid-cols-3">
+            {/*
+              `border-t` only. A bottom rule here and the rule that opens the next section are
+              forty pixels apart with nothing between them, which reads as an empty band rather
+              than as two divisions.
+            */}
+            <dl className="grid gap-5 border-t border-line pt-5 sm:grid-cols-3">
               <Detail label="Destination">{event.data.destination.address}</Detail>
               <Detail label="Everyone arrives by">
                 {formatInZone(new Date(event.data.arrival_at), event.data.timezone)}

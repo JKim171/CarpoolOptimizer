@@ -1,29 +1,35 @@
 /**
  * Form and layout primitives.
  *
- * These exist because the next two slices add a fifty-row roster table and a results sidebar, and
- * both will copy whatever pattern is in front of them. One definition of "what an input looks like"
- * is cheap now and expensive once three screens have their own.
+ * These exist because the roster table and the results list will copy whatever pattern is in front
+ * of them. One definition of "what an input looks like" is cheap now and expensive once three
+ * screens have their own.
  *
  * Deliberately plain: no variant systems, no polymorphic `as` props, no class-merging helper. The
  * app has one visual language and a handful of controls, and the abstraction that fits that is a
  * function that returns the right element.
  *
- * Two conventions the screens rely on, written here because nowhere else can enforce them:
+ * Three conventions the screens rely on, written here because nowhere else can enforce them:
  *
- *  - **Type scale.** Page title `text-2xl/3xl`, section heading `text-base`, sub-heading and body
- *    `text-sm`, meta `text-xs`. Headings were all `text-sm font-medium` at one point, which made a
- *    section indistinguishable from the thing inside it -- "Add people" read exactly like its own
- *    child "Paste a roster". `SectionHeading` and `Panel`'s `title` exist so that cannot recur.
- *  - **Radius says what a thing is.** Containers are `rounded-lg`, controls `rounded-md`. When
- *    both were `rounded-md` on the same surface, a route card and a text input were the same
- *    object at a glance.
+ *  - **A rule separates; a box contains.** Almost nothing here is a box. The screen was a stack of
+ *    bordered cards on a tinted plane, which is how every generated dashboard looks and which says
+ *    nothing: a border around a thing that nobody was going to confuse with its neighbour is
+ *    decoration. Sections are divided by a hairline and by space. The surviving boxes are the ones
+ *    that genuinely contain something you can act on -- an input, the warn block.
+ *  - **Type scale.** Page title `font-display text-4xl/5xl`, section heading `font-display
+ *    text-2xl`, sub-heading `font-display text-lg`, body `text-[15px]`, dense rows and meta
+ *    `text-sm`/`text-xs`. Display is always the serif, never bolded -- `Instrument Serif` has one
+ *    weight, and hierarchy comes from size, not from piling on `font-bold`.
+ *  - **Labels are set in sentence case, not `uppercase tracking-wide`.** Tiny letterspaced capitals
+ *    on every label is the other tell of a generated interface, and it costs legibility for
+ *    nothing. A label is small and quiet; that is enough to make it a label.
  */
 
 import type { ReactNode, SelectHTMLAttributes } from "react";
 
+/** 2px, not `rounded-md`. Print has corners; a 6px radius on every element is a house style. */
 const CONTROL =
-  "w-full rounded-md border border-line bg-surface-raised px-3 py-2 text-sm text-ink " +
+  "w-full rounded-[2px] border border-line bg-surface-raised px-3 py-2 text-[15px] text-ink " +
   "transition-colors placeholder:text-ink-muted hover:border-line-strong disabled:opacity-50";
 
 /** A labelled control, with room for the "why" text a coordinator needs at the point of entry. */
@@ -74,12 +80,12 @@ export function Button({
   variant?: "primary" | "quiet" | "ghost";
 }) {
   const base =
-    "rounded-md text-sm font-medium transition-colors disabled:opacity-50 " +
+    "rounded-[2px] text-sm font-medium transition-colors disabled:opacity-50 " +
     (variant === "ghost" ? "px-2 py-1" : "px-4 py-2");
   const look = {
     primary: "bg-accent text-accent-ink hover:bg-accent-hover",
-    quiet: "border border-line text-ink hover:border-line-strong hover:bg-surface-sunken",
-    ghost: "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+    quiet: "border border-line-strong text-ink hover:bg-surface-sunken",
+    ghost: "text-ink-muted hover:text-ink hover:underline",
   }[variant];
   return <button {...props} className={`${base} ${look}`} />;
 }
@@ -88,11 +94,16 @@ export function Button({
  * An error the operator has to act on.
  *
  * `role="alert"` so it is announced rather than silently appearing below the fold -- these messages
- * are the difference between a stuck form and a fixed one.
+ * are the difference between a stuck form and a fixed one. Marked with a heavy rule down the side
+ * rather than a filled box: it has to be found while scanning, and on a paper-coloured page a bar
+ * in the margin does that at least as well as a tinted rectangle.
  */
 export function Problem({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="rounded-md bg-danger-surface px-3 py-2 text-sm text-danger-ink">
+    <p
+      role="alert"
+      className="border-l-2 border-danger-ink bg-danger-surface py-2 pl-3 pr-3 text-[15px] text-danger-ink"
+    >
       {children}
     </p>
   );
@@ -101,15 +112,14 @@ export function Problem({ children }: { children: ReactNode }) {
 /** A warning the operator should see but need not act on before continuing. */
 export function Notice({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-md border border-warn-line bg-warn-surface px-3 py-2 text-sm text-warn-ink">
+    <p className="border-l-2 border-warn-line bg-warn-surface py-2 pl-3 pr-3 text-[15px] text-warn-ink">
       {children}
     </p>
   );
 }
 
 /**
- * A short value picked out of its surroundings: a role in a table column, an event's handle, a
- * status.
+ * A short value picked out of its surroundings: a role in a table column, an event's handle.
  *
  * `tone` says what kind of thing it is, not what colour to use. `accent` is for the one value in a
  * column that changes what the row *means* -- a driver among passengers -- and is deliberately the
@@ -122,7 +132,7 @@ export function Badge({
   children,
 }: {
   tone?: "plain" | "accent";
-  /** For machine-readable handles, where a reader has to compare characters rather than words. */
+  /** For machine-readable handles, where a reader compares characters rather than reading words. */
   mono?: boolean;
   children: ReactNode;
 }) {
@@ -130,8 +140,8 @@ export function Badge({
     tone === "accent" ? "bg-accent-soft text-accent-soft-ink" : "bg-surface-sunken text-ink-muted";
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
-        mono ? "font-mono" : ""
+      className={`inline-flex items-center rounded-[2px] px-1.5 py-0.5 text-xs ${
+        mono ? "font-mono" : "font-medium"
       } ${look}`}
     >
       {children}
@@ -139,6 +149,22 @@ export function Badge({
   );
 }
 
+/**
+ * A hairline divider.
+ *
+ * The workhorse of this layout: what used to be a border around every block is now a line between
+ * blocks, which is the same information and a great deal less furniture.
+ */
+export function Rule({ className = "" }: { className?: string }) {
+  return <hr className={`border-0 border-t border-line ${className}`} />;
+}
+
+/**
+ * A bordered block, for the few things that really are containers.
+ *
+ * Kept for forms -- a set of fields genuinely is one object, and the border is what says where it
+ * starts and stops. Everything that was a `Panel` merely to look tidy is a `Section` with a rule.
+ */
 export function Panel({
   title,
   children,
@@ -149,8 +175,8 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <div className={`rounded-lg border border-line bg-surface-raised p-5 ${className}`}>
-      {title && <h3 className="mb-4 text-sm font-semibold text-ink">{title}</h3>}
+    <div className={`rounded-[2px] border border-line bg-surface-raised p-5 ${className}`}>
+      {title && <h3 className="mb-4 font-display text-lg text-ink">{title}</h3>}
       {children}
     </div>
   );
@@ -172,8 +198,8 @@ export function SectionHeading({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <h2 className="text-base font-semibold tracking-tight text-ink">{title}</h2>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+      <h2 className="font-display text-2xl text-ink">{title}</h2>
       {(meta || actions) && (
         <div className="flex items-center gap-3">
           {meta && <span className="text-xs text-ink-muted">{meta}</span>}
@@ -184,7 +210,12 @@ export function SectionHeading({
   );
 }
 
-/** A titled block of the page. One definition of the gap between a heading and what it heads. */
+/**
+ * A titled block of the page, opened by a rule.
+ *
+ * The rule above the heading is what replaced the border around everything: it says "a new thing
+ * starts here" using one line instead of four, and it is how a printed page has always done it.
+ */
 export function Section({
   title,
   meta,
@@ -197,8 +228,11 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-4">
-      <SectionHeading title={title} meta={meta} actions={actions} />
+    <section className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
+        <Rule />
+        <SectionHeading title={title} meta={meta} actions={actions} />
+      </div>
       {children}
     </section>
   );
@@ -207,10 +241,10 @@ export function Section({
 /**
  * Page frame. One place decides max width and gutters, so screens cannot disagree about them.
  *
- * `max-w-5xl`, not `3xl`: the event screen is a five-column roster table, a map and a column of
- * route cards, and at 3xl it ran as a narrow ribbon with two thirds of a laptop screen empty
- * beside it. This is still a measure that reads -- the prose on the create screen is the widest
- * running text and sits well inside it.
+ * `max-w-5xl`: the event screen is a five-column roster table and a list of routes, and narrower
+ * than this it ran as a ribbon with two thirds of a laptop screen empty beside it. Running prose is
+ * capped well inside it per-screen rather than here, since the table wants the full measure and a
+ * paragraph does not.
  */
 export function Page({ children }: { children: ReactNode }) {
   return (
@@ -220,12 +254,28 @@ export function Page({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Escapes the page's measure to the full width of the window.
+ *
+ * For the map, which is the one element here that is better the bigger it is -- it is the thing
+ * being verified, and at the width of a column of text it was a thumbnail. Everything else on the
+ * page is read, and reading wants a measure.
+ *
+ * The `left-1/2 w-screen -translate-x-1/2` trick measures `100vw`, which includes the scrollbar
+ * gutter; `overflow-x-clip` on the body in `layout.tsx` is what keeps that from showing up as a few
+ * pixels of horizontal scroll, and it has to be `clip` rather than `hidden` so that nothing inside
+ * loses `position: sticky`.
+ */
+export function Bleed({ children }: { children: ReactNode }) {
+  return <div className="relative left-1/2 w-screen -translate-x-1/2">{children}</div>;
+}
+
 /** A label/value pair, for the read-only summaries on the event page. */
 export function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</dt>
-      <dd className="mt-1 text-sm text-ink">{children}</dd>
+      <dt className="text-xs text-ink-muted">{label}</dt>
+      <dd className="mt-1 text-[15px] text-ink">{children}</dd>
     </div>
   );
 }

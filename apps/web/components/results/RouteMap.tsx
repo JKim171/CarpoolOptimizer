@@ -98,6 +98,7 @@ export function RouteMap({
   leg,
   highlightedRouteId,
   className = "h-96",
+  square = false,
 }: {
   routes: MappedRoute[];
   venue: Venue | null;
@@ -105,6 +106,8 @@ export function RouteMap({
   highlightedRouteId: string | null;
   /** Sets the frame's height; the map fills it. Defaults to the height it had when it stood alone. */
   className?: string;
+  /** Drops the frame when the map runs to the window's edges, where a border has nothing to divide. */
+  square?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -248,16 +251,26 @@ export function RouteMap({
   }, [routes, venue, ready]);
 
   return (
-    // The frame fills whatever height `className` sets, so a caller that stands the map beside a
-    // scrolling column can size it to that column rather than to a constant written in here.
+    // The frame fills whatever height `className` sets, so a caller running the map to the window's
+    // edges can size it to the viewport rather than to a constant written in here.
     <div className={`flex flex-col ${className}`}>
       <div
         ref={container}
-        className="min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-line bg-surface-sunken"
+        className={`min-h-0 w-full flex-1 bg-surface-sunken ${
+          square ? "border-y border-line" : "overflow-hidden rounded-[2px] border border-line"
+        }`}
         role="application"
         aria-label="Each car's route, with stops numbered in pickup order."
       />
-      <p className="mt-1 shrink-0 text-xs text-ink-muted">
+      {/*
+        The caption is a sentence, so it keeps the page's measure even when the map does not: a
+        line of text running the full width of a window is not something anybody reads.
+      */}
+      <p
+        className={`mt-1.5 shrink-0 text-xs text-ink-muted ${
+          square ? "mx-auto w-full max-w-5xl px-6 sm:px-8" : ""
+        }`}
+      >
         {failed
           ? "The map could not load. Every car and stop is listed below in order."
           : "Lines join stops directly and are not driving directions — use a car's Google Maps link for those."}

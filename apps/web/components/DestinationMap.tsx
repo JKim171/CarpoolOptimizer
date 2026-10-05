@@ -98,7 +98,7 @@ export function DestinationMap({
     <div className={className}>
       <div
         ref={container}
-        className="h-64 w-full overflow-hidden rounded-md border border-line bg-surface-sunken"
+        className="h-64 w-full overflow-hidden rounded-[2px] border border-line bg-surface-sunken"
         role="application"
         aria-label="Destination location. Drag the marker to correct it."
       />

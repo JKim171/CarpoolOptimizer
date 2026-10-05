@@ -213,14 +213,18 @@ export function PickupMap({
   }, [participants, destination, ready]);
 
   return (
+    // Taller than it was, but deliberately NOT run to the window's edges the way the results map
+    // is. Hovering a table row highlights its pin and vice versa, and that pairing only works while
+    // both are on screen together -- a full-bleed map here would push the table it is paired with
+    // off the bottom.
     <div className={className}>
       <div
         ref={container}
-        className="h-80 w-full overflow-hidden rounded-lg border border-line bg-surface-sunken"
+        className="h-[28rem] w-full overflow-hidden rounded-[2px] border border-line bg-surface-sunken"
         role="application"
         aria-label="Pickup locations. Drag a pin to correct someone's address."
       />
-      <p className="mt-1 text-xs text-ink-muted">
+      <p className="mt-1.5 text-xs text-ink-muted">
         {failed
           ? "The map could not load. The roster table is still authoritative — every address is listed there."
           : participants.length === 0

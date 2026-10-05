@@ -12,7 +12,25 @@
 
 import { setWorkerUrl } from "maplibre-gl";
 
-export const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+/**
+ * `positron`, not `liberty`.
+ *
+ * Liberty is a full-colour general-purpose basemap -- green parkland, blue water, coloured road
+ * classes -- and it was competing with the only thing on the map that carries information here:
+ * the eight route colours in `lib/results/colors.ts`. At a thumbnail that was tolerable. Now that
+ * the map runs the full width of the window it is the loudest element on the page, and it is
+ * loudest about the parts that mean nothing.
+ *
+ * Positron is the desaturated grey basemap that newspapers and data graphics use, for exactly this
+ * reason: it is a ground for marks to sit on. It also suits a page set like a printed document,
+ * where a map is a plate.
+ *
+ * It stays light in both themes, deliberately. The route palette is documented as chosen to be
+ * legible *on a light basemap*, and a dark ground would need a second palette of eight colours
+ * re-picked against it. OpenFreeMap does serve `dark`, so that remains open -- it is a palette
+ * decision, not a tile-source one.
+ */
+export const STYLE = "https://tiles.openfreemap.org/styles/positron";
 
 /** Ann Arbor, until something real recentres the view. */
 export const FALLBACK_CENTER: [number, number] = [-83.743, 42.2808];

@@ -123,25 +123,25 @@ export function RosterTable({
     <div className="flex flex-col gap-2">
       {error && <Problem>{error}</Problem>}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="w-full text-left text-[15px]">
           <caption className="sr-only">
             Roster. Hover a row to highlight that person on the map.
           </caption>
-          <thead className="text-xs uppercase tracking-wide text-ink-muted">
-            <tr className="border-b border-line">
-              <th scope="col" className="py-2.5 pr-3 font-medium">
+          <thead className="text-sm text-ink-muted">
+            <tr className="border-b border-line-strong">
+              <th scope="col" className="py-2 pr-3 font-normal">
                 Name
               </th>
-              <th scope="col" className="py-2.5 pr-3 font-medium">
+              <th scope="col" className="py-2 pr-3 font-normal">
                 Pickup
               </th>
-              <th scope="col" className="py-2.5 pr-3 font-medium">
+              <th scope="col" className="py-2 pr-3 font-normal">
                 Role
               </th>
-              <th scope="col" className="py-2.5 pr-3 text-right font-medium">
+              <th scope="col" className="py-2 pr-3 text-right font-normal">
                 Seats
               </th>
-              <th scope="col" className="py-2.5 font-medium">
+              <th scope="col" className="py-2 font-normal">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -215,7 +215,7 @@ export function RosterTable({
                     </>
                   ) : (
                     <>
-                      <td className="py-2.5 pr-3 font-medium text-ink">{person.display_name}</td>
+                      <td className="py-2.5 pr-3 text-ink">{person.display_name}</td>
                       <td className="py-2.5 pr-3 text-ink-muted">{person.pickup.address}</td>
                       {/*
                         Who can drive is the one thing this table is consulted for -- it decides

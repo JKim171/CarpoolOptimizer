@@ -164,7 +164,7 @@ export function PasteRoster({
           rows={5}
           spellCheck={false}
           placeholder={EXAMPLE}
-          className="mt-2 w-full rounded-md border border-line bg-surface-raised px-3 py-2 font-mono text-xs text-ink placeholder:text-ink-muted hover:border-line-strong"
+          className="mt-2 w-full rounded-[2px] border border-line bg-surface-raised px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-muted hover:border-line-strong"
         />
       </label>
 
@@ -227,7 +227,7 @@ export function PasteRoster({
           {candidates.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-ink-muted">
+                <thead className="text-sm text-ink-muted">
                   <tr>
                     <th className="py-1 pr-3 font-medium">Name</th>
                     <th className="py-1 pr-3 font-medium">Pickup</th>

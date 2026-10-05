@@ -47,7 +47,7 @@ export function PinSelect({
         value={value ?? ""}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-        className={`max-w-36 truncate rounded-md border px-1.5 py-1 text-xs transition-colors disabled:opacity-50 ${
+        className={`max-w-32 truncate rounded-[2px] border px-1.5 py-1 text-xs transition-colors disabled:opacity-50 ${
           pinned
             ? "border-line bg-surface-raised text-ink"
             : "border-transparent bg-transparent text-ink-muted hover:border-line hover:bg-surface-raised"

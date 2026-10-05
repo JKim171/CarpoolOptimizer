@@ -5,56 +5,65 @@
  *
  * Components name what a colour is *for* -- `border-line`, `text-ink-muted` -- so dark mode is one
  * block of overrides here rather than a `dark:` variant on every element. The screens are dense
- * (a fifty-row roster, a results sidebar), and `dark:` pairs sprinkled through that are how a
- * palette drifts out of alignment.
+ * (a fifty-row roster, a results list), and `dark:` pairs sprinkled through that are how a palette
+ * drifts out of alignment.
+ *
+ * **The palette is warm, and that is the point.** It was Tailwind's neutral grey with a blue-600
+ * accent, which is the default of every generated app and read as one. Paper is never neutral: an
+ * off-white with yellow in it and a near-black with brown in it are what a printed page looks like,
+ * and the whole screen is a printed timetable -- a roster, a set of times, a destination.
+ *
+ * The accent is an ink navy rather than a UI blue. It has to coexist with `lib/results/colors.ts`,
+ * whose first car is `#1d4ed8`: that one is vivid and sits on a map, this one is dark and sits in
+ * running text, so a link never reads as a car.
  */
 
 :root {
-  --surface: #ffffff;
-  /* Inputs, cards and the map frame: one step off the page so edges read without a heavy border. */
-  --surface-raised: #f7f7f8;
-  --surface-sunken: #f0f0f2;
-  --line: #d9d9de;
-  --line-strong: #b8b8c0;
-  --ink: #17171a;
-  --ink-muted: #63636d;
-  --accent: #1d4ed8;
-  --accent-hover: #1e40af;
-  --accent-ink: #ffffff;
+  --surface: #faf8f3;
+  /* Inputs and the few things that still need a plane of their own. Lighter than the page, not
+     darker: ink sits on paper, and a sunken field reads as a hole in it. */
+  --surface-raised: #ffffff;
+  --surface-sunken: #f1ede4;
+  --line: #e2dbcd;
+  --line-strong: #b9ae99;
+  --ink: #1c1a16;
+  --ink-muted: #6d6456;
+  --accent: #1f3864;
+  --accent-hover: #142747;
+  --accent-ink: #faf8f3;
   /* A tinted chip, not a fill: `accent-ink` is the text *on* `accent`, which is the opposite
-     relationship. Used where a value has to be picked out of a dense column -- the driver badge in
-     a fifty-row roster -- without carrying a button's weight. Both pairs clear 7:1, which small
-     bold text at `text-xs` needs. */
-  --accent-soft: #eef3ff;
-  --accent-soft-ink: #1e40af;
-  --danger-surface: #fef2f2;
-  --danger-ink: #991b1b;
+     relationship. Used where a value has to be picked out of a dense column -- the driver mark in a
+     fifty-row roster. Both pairs clear 7:1, which small text at `text-xs` needs. */
+  --accent-soft: #e7ecf5;
+  --accent-soft-ink: #1f3864;
+  --danger-surface: #fbeeea;
+  --danger-ink: #8f2c17;
   /* Warn had ink only, which was enough while it was one line of text. The unassigned block is a
-     panel: people left without a ride have to be as visible as the cars that were filled. */
-  --warn-surface: #fffbeb;
-  --warn-line: #fcd34d;
-  --warn-ink: #92400e;
+     whole section: people left without a ride have to be as visible as the cars that were filled. */
+  --warn-surface: #fdf4e2;
+  --warn-line: #e0c07a;
+  --warn-ink: #7c5410;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #0d0d0f;
-    --surface-raised: #17171a;
-    --surface-sunken: #1f1f23;
-    --line: #2e2e34;
-    --line-strong: #44444c;
-    --ink: #ededf0;
-    --ink-muted: #9a9aa4;
-    --accent: #3b82f6;
-    --accent-hover: #60a5fa;
-    --accent-ink: #0d0d0f;
-    --accent-soft: #16233d;
-    --accent-soft-ink: #93c5fd;
-    --danger-surface: #2a1213;
-    --danger-ink: #fca5a5;
-    --warn-surface: #241a06;
-    --warn-line: #4d3a0d;
-    --warn-ink: #fbbf24;
+    --surface: #15130f;
+    --surface-raised: #1e1b16;
+    --surface-sunken: #272319;
+    --line: #342f25;
+    --line-strong: #534b3a;
+    --ink: #ece6da;
+    --ink-muted: #9d9281;
+    --accent: #9cb8e6;
+    --accent-hover: #c0d2f0;
+    --accent-ink: #15130f;
+    --accent-soft: #1d2740;
+    --accent-soft-ink: #a8c2ec;
+    --danger-surface: #2d1511;
+    --danger-ink: #f0a894;
+    --warn-surface: #241c08;
+    --warn-line: #4b3c13;
+    --warn-ink: #e3b863;
   }
 }
 
@@ -77,15 +86,26 @@
   --color-warn-line: var(--warn-line);
   --color-warn-ink: var(--warn-ink);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display), ui-serif, Georgia, serif;
+  --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
 }
 
 body {
   background: var(--surface);
   color: var(--ink);
-  /* The scaffold hardcoded Arial here, which silently overrode the font `layout.tsx` loads. */
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif;
+}
+
+/**
+ * Display type is set tight and optically a touch smaller than its box.
+ *
+ * `Instrument Serif` is a high-contrast display face drawn for large sizes; at its default tracking
+ * a heading looks loose beside the text face. This is the one global type rule, so a heading cannot
+ * be set two different ways on two screens.
+ */
+.font-display {
+  letter-spacing: -0.015em;
 }
 
 /**
@@ -96,5 +116,5 @@ body {
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 2px;
 }

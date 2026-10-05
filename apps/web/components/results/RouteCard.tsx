@@ -53,23 +53,21 @@ export function RouteCard({
   const stops = legOf(route, leg).stops;
 
   return (
+    // A rule between cars, not a box around each one. Twelve bordered rectangles stacked down a
+    // page is furniture; a line is the same division and reads as a timetable. The car's colour is
+    // carried by a bar in the left margin, which is also the only thing tying this block to a line
+    // on the map, so it wants more presence than the 10px dot it was.
     <article
       onMouseEnter={() => onHighlight(route.id)}
       onMouseLeave={() => onHighlight(null)}
-      className={`rounded-lg border bg-surface-raised p-4 transition-colors ${
-        highlighted ? "border-line-strong" : "border-line"
+      className={`border-t border-line py-5 pl-4 transition-colors first:border-t-0 ${
+        highlighted ? "bg-surface-sunken" : ""
       }`}
+      style={{ boxShadow: `inset 3px 0 0 0 ${color}` }}
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
-          <span
-            aria-hidden
-            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ background: color }}
-          />
-          {route.driver_name} drives
-        </h3>
-        <p className="text-xs tabular-nums text-ink-muted">
+        <h3 className="font-display text-xl text-ink">{route.driver_name} drives</h3>
+        <p className="text-sm tabular-nums text-ink-muted">
           {route.seats_used} {route.seats_used === 1 ? "rider" : "riders"} ·{" "}
           {formatDuration(route.total_duration_s)} · {formatDistance(route.total_distance_m)} ·{" "}
           {route.detour_seconds > 0
@@ -85,14 +83,14 @@ export function RouteCard({
         plus one muted line instead.
       */}
       {stops.length === 0 ? (
-        <p className="mt-2 text-xs text-ink-muted">
+        <p className="mt-1 text-sm text-ink-muted">
           {leg === "outbound" ? "No riders on the way there." : "No riders on the way back."}{" "}
           {directionsHref ? (
             <a
               href={directionsHref}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-accent hover:underline"
+              className="text-accent underline underline-offset-2"
             >
               Google Maps ↗
             </a>
@@ -103,28 +101,32 @@ export function RouteCard({
         </p>
       ) : (
         <>
+          {/*
+            A numbered list set like a timetable: the stop number in a hanging column of its own,
+            then the name, with the time flush right where a reader scans for it. Times are the
+            text face with `tabular-nums` rather than mono -- lining tabular figures align in a
+            column without the typewriter texture.
+          */}
           <ol className="mt-3 flex flex-col">
             {stops.map((stop) => (
               <li
                 key={stop.participant_id}
-                className="flex items-center gap-3 rounded-md py-1.5 transition-colors hover:bg-surface-sunken"
+                className="flex items-baseline gap-3 py-1.5 transition-colors hover:bg-surface-sunken"
               >
                 <span
                   aria-hidden
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-                  style={{ background: color }}
+                  className="w-5 shrink-0 text-right text-sm tabular-nums text-ink-muted"
+                  style={{ color }}
                 >
                   {stopNumber(stop)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">
-                    {stop.display_name}
-                    <span className="ml-2 font-mono text-xs text-ink-muted">
-                      {formatTimeInZone(new Date(stop.eta), timeZone)}
-                    </span>
-                  </p>
-                  <p className="truncate text-xs text-ink-muted">{stop.pickup_address}</p>
+                  <p className="truncate text-[15px] text-ink">{stop.display_name}</p>
+                  <p className="truncate text-sm text-ink-muted">{stop.pickup_address}</p>
                 </div>
+                <span className="shrink-0 text-[15px] tabular-nums text-ink">
+                  {formatTimeInZone(new Date(stop.eta), timeZone)}
+                </span>
                 <PinSelect
                   value={pinnedBy.get(stop.participant_id) ?? null}
                   riderId={stop.participant_id}
@@ -136,18 +138,18 @@ export function RouteCard({
             ))}
           </ol>
 
-          <footer className="mt-3 border-t border-line pt-2.5">
+          <footer className="mt-3">
             {directionsHref ? (
               <a
                 href={directionsHref}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="text-xs text-accent hover:underline"
+                className="text-sm text-accent underline underline-offset-2"
               >
                 Open this leg in Google Maps ↗
               </a>
             ) : (
-              <p className="text-xs text-ink-muted">
+              <p className="text-sm text-ink-muted">
                 No directions link — someone on this leg has no coordinates on the roster. A link
                 that quietly skipped them would send the driver past a house without stopping.
               </p>

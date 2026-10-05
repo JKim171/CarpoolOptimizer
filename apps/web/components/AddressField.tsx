@@ -93,7 +93,7 @@ export function AddressField({
       </Field>
 
       {open && places.length > 0 && (
-        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-line bg-surface shadow-lg">
+        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-[2px] border border-line-strong bg-surface shadow-lg">
           {places.map((place, index) => (
             <li key={`${place.address}-${index}`}>
               <button

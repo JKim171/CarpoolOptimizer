@@ -67,7 +67,10 @@ export function CreateEventForm() {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-5">
+    // Capped, like the add-a-person form: at the page's full measure an event *name* field ran
+    // eight hundred pixels and read as a textarea. The map below it is the one thing here that
+    // wants the width.
+    <form onSubmit={submit} className="flex max-w-2xl flex-col gap-5">
       <Field label="Event name">
         <TextInput
           value={name}

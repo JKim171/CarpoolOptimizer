@@ -25,13 +25,13 @@ function Stat({
   label: string;
   tone?: "plain" | "warn";
 }) {
-  // `dt` before `dd` is the order the markup requires; `flex-col-reverse` puts the number on top,
+  // `dt` before `dd` is the order the markup requires; `flex-col-reverse` puts the figure on top,
   // which is the order it is read in.
   return (
     <div className="flex flex-col-reverse">
-      <dt className="mt-0.5 text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</dt>
+      <dt className="mt-0.5 text-sm text-ink-muted">{label}</dt>
       <dd
-        className={`text-xl font-semibold tabular-nums ${
+        className={`font-display text-4xl tabular-nums ${
           tone === "warn" ? "text-warn-ink" : "text-ink"
         }`}
       >
@@ -53,18 +53,20 @@ export function ResultSummary({
   const driving = routes.reduce((n, route) => n + route.total_duration_s, 0);
 
   return (
-    <dl className="grid grid-cols-2 gap-5 rounded-lg border border-line bg-surface-raised p-5 sm:grid-cols-4">
-      <Stat value={String(routes.length)} label={routes.length === 1 ? "Car" : "Cars"} />
-      <Stat value={String(riders)} label={riders === 1 ? "Rider" : "Riders"} />
+    // Rules above and below rather than a box: the figures are the loudest thing on the page
+    // already, and a border around them is one more rectangle for no information.
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-5 sm:grid-cols-4">
+      <Stat value={String(routes.length)} label={routes.length === 1 ? "car" : "cars"} />
+      <Stat value={String(riders)} label={riders === 1 ? "rider" : "riders"} />
       <Stat
         value={String(unassigned.length)}
-        label="No ride"
+        label="no ride"
         tone={unassigned.length > 0 ? "warn" : "plain"}
       />
       {/* Detour, not total driving time: total is mostly the trip everyone was making anyway, so it
           barely moves between solutions. Detour is the part the solver is actually trading against
           a car, and the number that changes when you re-optimize. */}
-      <Stat value={formatDuration(detour)} label="Total detour" />
+      <Stat value={formatDuration(detour)} label="detour in all" />
       {/* On screen the four above are the decision; the total is here for anyone reading the page
           linearly, where "how much driving is this in all" is the obvious next question. */}
       <div className="sr-only">
