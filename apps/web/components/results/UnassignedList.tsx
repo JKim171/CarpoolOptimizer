@@ -30,11 +30,11 @@ export function UnassignedList({
   if (unassigned.length === 0) return null;
 
   return (
-    <section className="rounded-md border border-warn-line bg-warn-surface p-4">
-      <h3 className="text-sm font-medium text-warn-ink">
+    <section className="rounded-lg border border-warn-line bg-warn-surface p-5">
+      <h3 className="text-sm font-semibold text-warn-ink">
         {unassigned.length} {unassigned.length === 1 ? "person has" : "people have"} no ride
       </h3>
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className="mt-4 flex flex-col gap-2.5">
         {unassigned.map((person) => (
           <li key={person.participant_id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="text-sm text-ink">{person.display_name}</span>

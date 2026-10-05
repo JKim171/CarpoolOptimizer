@@ -250,7 +250,7 @@ export function RouteMap({
     <div className={className}>
       <div
         ref={container}
-        className="h-96 w-full overflow-hidden rounded-md border border-line bg-surface-sunken"
+        className="h-96 w-full overflow-hidden rounded-lg border border-line bg-surface-sunken"
         role="application"
         aria-label="Each car's route, with stops numbered in pickup order."
       />

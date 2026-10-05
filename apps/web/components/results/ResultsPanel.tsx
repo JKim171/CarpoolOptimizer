@@ -18,7 +18,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import { Button, Problem } from "@/components/ui/controls";
+import { Button, Notice, Problem, SectionHeading } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import {
   describeJob,
@@ -189,16 +189,16 @@ export function ResultsPanel({
   );
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-ink">Who drives whom</h2>
-        <div className="flex items-center gap-3">
-          {job.data && <span className="text-xs text-ink-muted">{describeJob(job.data)}</span>}
+    <section className="flex flex-col gap-4">
+      <SectionHeading
+        title="Who drives whom"
+        meta={job.data ? describeJob(job.data) : undefined}
+        actions={
           <Button onClick={() => start.mutate()} disabled={busy || people.length === 0}>
             {solution.data ? "Re-optimize" : "Work out the carpools"}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {people.length === 0 && (
         <p className="text-sm text-ink-muted">Add people to the roster first.</p>
@@ -217,11 +217,11 @@ export function ResultsPanel({
       {solution.data && (
         <>
           {solution.data.is_stale && (
-            <p className="rounded-md bg-warn-surface px-3 py-2 text-sm text-warn-ink">
+            <Notice>
               The roster has changed since this was worked out, so it is a real arrangement but not
               the current one. Re-optimize to bring it up to date — or activate it anyway if you
               prefer it.
-            </p>
+            </Notice>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -261,11 +261,11 @@ export function ResultsPanel({
           </div>
 
           {unplottable > 0 && (
-            <p className="text-sm text-warn-ink">
+            <Notice>
               {unplottable} {unplottable === 1 ? "stop is" : "stops are"} missing from the map:{" "}
               {unplottable === 1 ? "that person is" : "those people are"} no longer on the roster.
               They are still listed below.
-            </p>
+            </Notice>
           )}
 
           <RouteMap

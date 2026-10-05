@@ -17,7 +17,7 @@ import { PickupMap } from "@/components/roster/PickupMap";
 import { AddParticipantForm } from "@/components/roster/AddParticipantForm";
 import { PasteRoster } from "@/components/roster/PasteRoster";
 import { RosterTable } from "@/components/roster/RosterTable";
-import { Detail, Page, Panel, Problem } from "@/components/ui/controls";
+import { Detail, Notice, Page, Panel, Problem, Section } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import { eventKeys, fetchEvent } from "@/lib/api/events";
 import {
@@ -92,7 +92,6 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
         <Link href="/" className="text-sm text-accent hover:underline">
           ← All events
         </Link>
-        <p className="mt-2 font-mono text-xs text-ink-muted">{publicId}</p>
       </div>
 
       {event.isPending && <p className="text-sm text-ink-muted">Loading…</p>}
@@ -110,28 +109,32 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
 
       {event.isSuccess && (
         <>
-          <h1 className="text-2xl font-semibold text-ink">{event.data.name}</h1>
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <Detail label="Destination">{event.data.destination.address}</Detail>
-            <Detail label="Status">{event.data.status}</Detail>
-            <Detail label="Everyone arrives by">
-              {formatInZone(new Date(event.data.arrival_at), event.data.timezone)}
-            </Detail>
-            <Detail label="Event ends">
-              {formatInZone(new Date(event.data.ends_at), event.data.timezone)}
-            </Detail>
-            <Detail label="Time zone">{event.data.timezone}</Detail>
-            <Detail label="On the roster">
-              {people.length} of {MAX_PARTICIPANTS}
-            </Detail>
-          </dl>
-
-          <section className="flex flex-col gap-3">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-medium text-ink">Roster</h2>
-              {roster.isFetching && <span className="text-xs text-ink-muted">Refreshing…</span>}
+          <header className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+                {event.data.name}
+              </h1>
+              <span className="rounded-md bg-surface-sunken px-2 py-1 font-mono text-xs text-ink-muted">
+                {publicId}
+              </span>
             </div>
+            <dl className="grid gap-5 rounded-lg border border-line bg-surface-raised p-5 sm:grid-cols-2 lg:grid-cols-3">
+              <Detail label="Destination">{event.data.destination.address}</Detail>
+              <Detail label="Everyone arrives by">
+                {formatInZone(new Date(event.data.arrival_at), event.data.timezone)}
+              </Detail>
+              <Detail label="Event ends">
+                {formatInZone(new Date(event.data.ends_at), event.data.timezone)}
+              </Detail>
+              <Detail label="Time zone">{event.data.timezone}</Detail>
+              <Detail label="Status">{event.data.status}</Detail>
+              <Detail label="On the roster">
+                {people.length} of {MAX_PARTICIPANTS}
+              </Detail>
+            </dl>
+          </header>
 
+          <Section title="Roster" meta={roster.isFetching ? "Refreshing…" : undefined}>
             {roster.isError && (
               <Problem>
                 {roster.error instanceof ApiError
@@ -149,10 +152,10 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
             )}
 
             {unlocated > 0 && (
-              <p className="text-sm text-warn-ink">
+              <Notice>
                 {unlocated} {unlocated === 1 ? "person has" : "people have"} no coordinates yet and{" "}
                 {unlocated === 1 ? "is" : "are"} not on the map. Edit the row to set an address.
-              </p>
+              </Notice>
             )}
 
             <PickupMap
@@ -186,10 +189,9 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
                 busyId={remove.isPending ? remove.variables : null}
               />
             )}
-          </section>
+          </Section>
 
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-ink">Add people</h2>
+          <Section title="Add people">
             {seatsLeft === 0 ? (
               <Problem>
                 This roster is full at {MAX_PARTICIPANTS} people. Remove someone before adding
@@ -199,15 +201,14 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
               <PasteRoster publicId={publicId} seatsLeft={seatsLeft} onImported={refreshRoster} />
             )}
 
-            <Panel>
-              <h3 className="mb-3 text-sm font-medium text-ink">Or add one person</h3>
+            <Panel title="Or add one person">
               <AddParticipantForm
                 publicId={publicId}
                 disabled={seatsLeft === 0}
                 onAdded={refreshRoster}
               />
             </Panel>
-          </section>
+          </Section>
 
           {/*
             Last, after the roster and the ways of adding to it: inputs then output, which is both

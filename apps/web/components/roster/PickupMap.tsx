@@ -216,7 +216,7 @@ export function PickupMap({
     <div className={className}>
       <div
         ref={container}
-        className="h-80 w-full overflow-hidden rounded-md border border-line bg-surface-sunken"
+        className="h-80 w-full overflow-hidden rounded-lg border border-line bg-surface-sunken"
         role="application"
         aria-label="Pickup locations. Drag a pin to correct someone's address."
       />

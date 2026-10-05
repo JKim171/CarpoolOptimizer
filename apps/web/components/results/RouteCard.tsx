@@ -56,20 +56,20 @@ export function RouteCard({
     <article
       onMouseEnter={() => onHighlight(route.id)}
       onMouseLeave={() => onHighlight(null)}
-      className={`rounded-md border bg-surface-raised p-4 transition-colors ${
+      className={`rounded-lg border bg-surface-raised p-5 transition-colors ${
         highlighted ? "border-line-strong" : "border-line"
       }`}
     >
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-medium text-ink">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
           <span
             aria-hidden
-            className="inline-block h-3 w-3 shrink-0 rounded-full"
+            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
             style={{ background: color }}
           />
           {route.driver_name} drives
         </h3>
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs tabular-nums text-ink-muted">
           {route.seats_used} {route.seats_used === 1 ? "rider" : "riders"} ·{" "}
           {formatDuration(route.total_duration_s)} · {formatDistance(route.total_distance_m)} ·{" "}
           {route.detour_seconds > 0
@@ -83,7 +83,7 @@ export function RouteCard({
           {leg === "outbound" ? "No riders on the way there." : "No riders on the way back."}
         </p>
       ) : (
-        <ol className="mt-3 flex flex-col gap-2">
+        <ol className="mt-4 flex flex-col gap-2.5">
           {stops.map((stop) => (
             <li key={stop.participant_id} className="flex items-start gap-3">
               <span
@@ -114,7 +114,7 @@ export function RouteCard({
         </ol>
       )}
 
-      <footer className="mt-3">
+      <footer className="mt-4 border-t border-line pt-3">
         {directionsHref ? (
           <a
             href={directionsHref}

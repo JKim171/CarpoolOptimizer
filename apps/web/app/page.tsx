@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSyncExternalStore } from "react";
 
 import { CreateEventForm } from "@/components/CreateEventForm";
-import { Page, Panel } from "@/components/ui/controls";
+import { Page, Panel, Section } from "@/components/ui/controls";
 import {
   forgetToken,
   knownEventsServerSnapshot,
@@ -24,9 +24,11 @@ export default function Home() {
 
   return (
     <Page>
-      <header>
-        <h1 className="text-2xl font-semibold text-ink">CarpoolOptimizer</h1>
-        <p className="mt-1 text-sm text-ink-muted">
+      <header className="max-w-2xl">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+          CarpoolOptimizer
+        </h1>
+        <p className="mt-2 text-sm text-ink-muted">
           Enter a roster, get an assignment: who drives whom, in what pickup order, out and back.
         </p>
       </header>
@@ -40,15 +42,14 @@ export default function Home() {
        * the organizer remove a dead row says exactly as much as the app actually knows.
        */}
       {known.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-medium text-ink">Your events on this device</h2>
-          <Panel className="p-0">
+        <Section title="Your events on this device">
+          <Panel className="overflow-hidden p-0">
             <ul className="divide-y divide-line">
               {known.map((publicId) => (
-                <li key={publicId} className="flex items-center gap-2 pr-2">
+                <li key={publicId} className="flex items-center gap-2 pr-3">
                   <Link
                     href={`/events/${publicId}`}
-                    className="flex-1 px-4 py-3 font-mono text-sm text-accent hover:bg-surface-sunken"
+                    className="flex-1 px-5 py-3 font-mono text-sm text-accent transition-colors hover:bg-surface-sunken"
                   >
                     {publicId}
                   </Link>
@@ -57,7 +58,7 @@ export default function Home() {
                     onClick={() => forgetToken(publicId)}
                     aria-label={`Remove ${publicId} from this device`}
                     title="Remove from this device"
-                    className="rounded-md px-2 py-1 text-xs text-ink-muted hover:text-danger-ink"
+                    className="rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:text-danger-ink"
                   >
                     Remove
                   </button>
@@ -65,17 +66,16 @@ export default function Home() {
               ))}
             </ul>
           </Panel>
-          <p className="mt-2 text-xs text-ink-muted">
+          <p className="max-w-2xl text-xs text-ink-muted">
             Organizer tokens are kept in this browser only. On another device you will need the link
             and its token. Removing forgets the token here — it does not delete the event.
           </p>
-        </section>
+        </Section>
       )}
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-ink">New event</h2>
+      <Section title="New event">
         <CreateEventForm />
-      </section>
+      </Section>
     </Page>
   );
 }

@@ -129,19 +129,19 @@ export function RosterTable({
           </caption>
           <thead className="text-xs uppercase tracking-wide text-ink-muted">
             <tr className="border-b border-line">
-              <th scope="col" className="py-2 pr-3 font-medium">
+              <th scope="col" className="py-2.5 pr-3 font-medium">
                 Name
               </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
+              <th scope="col" className="py-2.5 pr-3 font-medium">
                 Pickup
               </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
+              <th scope="col" className="py-2.5 pr-3 font-medium">
                 Role
               </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
+              <th scope="col" className="py-2.5 pr-3 text-right font-medium">
                 Seats
               </th>
-              <th scope="col" className="py-2 font-medium">
+              <th scope="col" className="py-2.5 font-medium">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -156,9 +156,9 @@ export function RosterTable({
                   onMouseEnter={() => onHighlight(person.id)}
                   onMouseLeave={() => onHighlight(null)}
                   onFocus={() => onHighlight(person.id)}
-                  className={
+                  className={`transition-colors ${
                     highlightedId === person.id ? "bg-surface-sunken" : "hover:bg-surface-sunken"
-                  }
+                  }`}
                 >
                   {editing && draft ? (
                     <>
@@ -215,22 +215,22 @@ export function RosterTable({
                     </>
                   ) : (
                     <>
-                      <td className="py-2 pr-3 text-ink">{person.display_name}</td>
-                      <td className="py-2 pr-3 text-ink-muted">{person.pickup.address}</td>
-                      <td className="py-2 pr-3 text-ink-muted">
+                      <td className="py-2.5 pr-3 font-medium text-ink">{person.display_name}</td>
+                      <td className="py-2.5 pr-3 text-ink-muted">{person.pickup.address}</td>
+                      <td className="py-2.5 pr-3 text-ink-muted">
                         {person.role === "driver" ? "Driver" : "Passenger"}
                       </td>
-                      <td className="py-2 pr-3 text-ink-muted">
+                      <td className="py-2.5 pr-3 text-right tabular-nums text-ink-muted">
                         {person.role === "driver" ? person.seats_available : "—"}
                       </td>
-                      <td className="py-2">
-                        <div className="flex justify-end gap-2">
-                          <Button type="button" variant="quiet" onClick={() => startEdit(person)}>
+                      <td className="py-2.5">
+                        <div className="flex justify-end gap-1">
+                          <Button type="button" variant="ghost" onClick={() => startEdit(person)}>
                             Edit
                           </Button>
                           <Button
                             type="button"
-                            variant="quiet"
+                            variant="ghost"
                             disabled={busy}
                             onClick={() => onCancel(person.id)}
                           >

@@ -67,8 +67,10 @@ export function AddParticipantForm({
     }
   }
 
+  // `max-w-2xl` rather than filling the panel: at the page's full width a name field runs most of
+  // a laptop screen, which reads as a text area and puts the label far from the caret.
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3">
+    <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
       <Field label="Name">
         <TextInput
           value={name}
