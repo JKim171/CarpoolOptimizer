@@ -107,6 +107,38 @@ export function Notice({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A short value picked out of its surroundings: a role in a table column, an event's handle, a
+ * status.
+ *
+ * `tone` says what kind of thing it is, not what colour to use. `accent` is for the one value in a
+ * column that changes what the row *means* -- a driver among passengers -- and is deliberately the
+ * only tone that tints, so that a table with one badge per row still reads as a table. `plain` is
+ * the same chip without the claim to attention.
+ */
+export function Badge({
+  tone = "plain",
+  mono = false,
+  children,
+}: {
+  tone?: "plain" | "accent";
+  /** For machine-readable handles, where a reader has to compare characters rather than words. */
+  mono?: boolean;
+  children: ReactNode;
+}) {
+  const look =
+    tone === "accent" ? "bg-accent-soft text-accent-soft-ink" : "bg-surface-sunken text-ink-muted";
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+        mono ? "font-mono" : ""
+      } ${look}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function Panel({
   title,
   children,

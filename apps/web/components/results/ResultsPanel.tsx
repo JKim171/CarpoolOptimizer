@@ -40,6 +40,7 @@ import {
 } from "@/lib/api/solutions";
 import { directionsUrl, legWaypoints, type Waypoint } from "@/lib/results/googleMaps";
 
+import { ResultSummary } from "./ResultSummary";
 import { RouteCard } from "./RouteCard";
 import { RouteMap, type MappedRoute } from "./RouteMap";
 import { UnassignedList } from "./UnassignedList";
@@ -224,6 +225,8 @@ export function ResultsPanel({
             </Notice>
           )}
 
+          <ResultSummary routes={routes} unassigned={solution.data.unassigned} />
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div
               role="group"
@@ -264,50 +267,69 @@ export function ResultsPanel({
             <Notice>
               {unplottable} {unplottable === 1 ? "stop is" : "stops are"} missing from the map:{" "}
               {unplottable === 1 ? "that person is" : "those people are"} no longer on the roster.
-              They are still listed below.
+              They are still listed beside it.
             </Notice>
           )}
 
-          <RouteMap
-            routes={mapped}
-            venue={venue}
-            leg={leg}
-            highlightedRouteId={highlightedRouteId}
-          />
+          {/*
+            Two columns from `lg`: the cards scroll, the map stays.
 
-          <div className="flex flex-col gap-3">
-            {routes.map((route, index) => (
-              <RouteCard
-                key={route.id}
-                route={route}
-                index={index}
-                leg={leg}
-                timeZone={timeZone}
+            Checking one car against the picture used to mean scrolling the map off screen and back,
+            and the answer to "does this ordering make sense" is exactly the comparison that costs.
+            `items-start` is what lets the map be `sticky` -- a stretched grid item is already as
+            tall as the row and has nothing to stick within.
+
+            The map keeps its place in source order, so the single-column stack below `lg` is still
+            map-then-cards: on a phone the picture is the orientation you want before a list that
+            runs past the fold. `lg:order-2` moves it right, where the authoritative list reads
+            first -- "the list decides, the map verifies".
+          */}
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <RouteMap
+              routes={mapped}
+              venue={venue}
+              leg={leg}
+              highlightedRouteId={highlightedRouteId}
+              // `100vh-9rem` leaves room for the sticky offset and the two-line caption under the
+              // frame, so the whole thing stays reachable: a sticky block taller than the viewport
+              // has a bottom edge you can never scroll to.
+              className="h-96 lg:sticky lg:top-6 lg:order-2 lg:h-[calc(100vh-9rem)] lg:max-h-[42rem]"
+            />
+
+            <div className="flex flex-col gap-3 lg:order-1">
+              {routes.map((route, index) => (
+                <RouteCard
+                  key={route.id}
+                  route={route}
+                  index={index}
+                  leg={leg}
+                  timeZone={timeZone}
+                  drivers={drivers}
+                  pinnedBy={pinnedBy}
+                  onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
+                  pinBusy={pin.isPending}
+                  directionsHref={directionsFor(route)}
+                  highlighted={highlightedRouteId === route.id}
+                  onHighlight={setHighlightedRouteId}
+                />
+              ))}
+
+              <UnassignedList
+                unassigned={solution.data.unassigned}
                 drivers={drivers}
                 pinnedBy={pinnedBy}
                 onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
                 pinBusy={pin.isPending}
-                directionsHref={directionsFor(route)}
-                highlighted={highlightedRouteId === route.id}
-                onHighlight={setHighlightedRouteId}
               />
-            ))}
+
+              {routes.length === 0 && solution.data.unassigned.length > 0 && (
+                <p className="text-sm text-ink-muted">
+                  No cars were formed. Nobody on this roster is marked as driving, or no driver has
+                  a free seat.
+                </p>
+              )}
+            </div>
           </div>
-
-          <UnassignedList
-            unassigned={solution.data.unassigned}
-            drivers={drivers}
-            pinnedBy={pinnedBy}
-            onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
-            pinBusy={pin.isPending}
-          />
-
-          {routes.length === 0 && solution.data.unassigned.length > 0 && (
-            <p className="text-sm text-ink-muted">
-              No cars were formed. Nobody on this roster is marked as driving, or no driver has a
-              free seat.
-            </p>
-          )}
         </>
       )}
     </section>

@@ -97,12 +97,13 @@ export function RouteMap({
   venue,
   leg,
   highlightedRouteId,
-  className,
+  className = "h-96",
 }: {
   routes: MappedRoute[];
   venue: Venue | null;
   leg: "outbound" | "inbound";
   highlightedRouteId: string | null;
+  /** Sets the frame's height; the map fills it. Defaults to the height it had when it stood alone. */
   className?: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -247,14 +248,16 @@ export function RouteMap({
   }, [routes, venue, ready]);
 
   return (
-    <div className={className}>
+    // The frame fills whatever height `className` sets, so a caller that stands the map beside a
+    // scrolling column can size it to that column rather than to a constant written in here.
+    <div className={`flex flex-col ${className}`}>
       <div
         ref={container}
-        className="h-96 w-full overflow-hidden rounded-lg border border-line bg-surface-sunken"
+        className="min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-line bg-surface-sunken"
         role="application"
         aria-label="Each car's route, with stops numbered in pickup order."
       />
-      <p className="mt-1 text-xs text-ink-muted">
+      <p className="mt-1 shrink-0 text-xs text-ink-muted">
         {failed
           ? "The map could not load. Every car and stop is listed below in order."
           : "Lines join stops directly and are not driving directions — use a car's Google Maps link for those."}

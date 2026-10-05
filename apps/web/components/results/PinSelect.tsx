@@ -33,14 +33,25 @@ export function PinSelect({
   // A pin naming yourself is rejected by the API, and a rider cannot be their own driver.
   const options = drivers.filter((d) => d.id !== riderId);
 
+  // Borderless until it is pointed at or carries a pin. One of these sits on every rider row, and
+  // as a bordered control they became a column of boxes louder than the names they act on -- the
+  // same thing that drove the roster table's actions to `ghost`. An unset pin is the common case
+  // and says nothing, so it should look like nothing; a set pin is an override of the solver and
+  // keeps its outline so it cannot be missed while scanning.
+  const pinned = value !== null;
+
   return (
-    <label className="flex items-center gap-1.5 text-xs text-ink-muted">
-      <span className="sr-only sm:not-sr-only">Pin to</span>
+    <label className="flex shrink-0 items-center text-xs">
+      <span className="sr-only">Pin to a driver</span>
       <select
         value={value ?? ""}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-        className="rounded border border-line bg-surface-raised px-1.5 py-1 text-xs text-ink hover:border-line-strong disabled:opacity-50"
+        className={`max-w-36 truncate rounded-md border px-1.5 py-1 text-xs transition-colors disabled:opacity-50 ${
+          pinned
+            ? "border-line bg-surface-raised text-ink"
+            : "border-transparent bg-transparent text-ink-muted hover:border-line hover:bg-surface-raised"
+        }`}
       >
         <option value="">no pin</option>
         {options.map((driver) => (

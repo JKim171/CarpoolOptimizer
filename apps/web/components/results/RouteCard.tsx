@@ -56,7 +56,7 @@ export function RouteCard({
     <article
       onMouseEnter={() => onHighlight(route.id)}
       onMouseLeave={() => onHighlight(null)}
-      className={`rounded-lg border bg-surface-raised p-5 transition-colors ${
+      className={`rounded-lg border bg-surface-raised p-4 transition-colors ${
         highlighted ? "border-line-strong" : "border-line"
       }`}
     >
@@ -78,59 +78,83 @@ export function RouteCard({
         </p>
       </header>
 
+      {/*
+        A car with nobody in it is a real and common outcome -- a driver whose own trip no rider was
+        on the way of -- but it is the least interesting card on the screen, and as a full-height
+        panel saying one sentence it took as much room as a car of four. It collapses to its header
+        plus one muted line instead.
+      */}
       {stops.length === 0 ? (
-        <p className="mt-3 text-sm text-ink-muted">
-          {leg === "outbound" ? "No riders on the way there." : "No riders on the way back."}
+        <p className="mt-2 text-xs text-ink-muted">
+          {leg === "outbound" ? "No riders on the way there." : "No riders on the way back."}{" "}
+          {directionsHref ? (
+            <a
+              href={directionsHref}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-accent hover:underline"
+            >
+              Google Maps ↗
+            </a>
+          ) : (
+            // Still worth saying with nobody aboard: this driver is making the trip either way.
+            <span>No directions link — this driver has no coordinates on the roster.</span>
+          )}
         </p>
       ) : (
-        <ol className="mt-4 flex flex-col gap-2.5">
-          {stops.map((stop) => (
-            <li key={stop.participant_id} className="flex items-start gap-3">
-              <span
-                aria-hidden
-                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-                style={{ background: color }}
+        <>
+          <ol className="mt-3 flex flex-col">
+            {stops.map((stop) => (
+              <li
+                key={stop.participant_id}
+                className="flex items-center gap-3 rounded-md py-1.5 transition-colors hover:bg-surface-sunken"
               >
-                {stopNumber(stop)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-ink">
-                  {stop.display_name}
-                  <span className="ml-2 font-mono text-xs text-ink-muted">
-                    {formatTimeInZone(new Date(stop.eta), timeZone)}
-                  </span>
-                </p>
-                <p className="truncate text-xs text-ink-muted">{stop.pickup_address}</p>
-              </div>
-              <PinSelect
-                value={pinnedBy.get(stop.participant_id) ?? null}
-                riderId={stop.participant_id}
-                drivers={drivers}
-                onChange={(driverId) => onPin(stop.participant_id, driverId)}
-                disabled={pinBusy}
-              />
-            </li>
-          ))}
-        </ol>
-      )}
+                <span
+                  aria-hidden
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+                  style={{ background: color }}
+                >
+                  {stopNumber(stop)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-ink">
+                    {stop.display_name}
+                    <span className="ml-2 font-mono text-xs text-ink-muted">
+                      {formatTimeInZone(new Date(stop.eta), timeZone)}
+                    </span>
+                  </p>
+                  <p className="truncate text-xs text-ink-muted">{stop.pickup_address}</p>
+                </div>
+                <PinSelect
+                  value={pinnedBy.get(stop.participant_id) ?? null}
+                  riderId={stop.participant_id}
+                  drivers={drivers}
+                  onChange={(driverId) => onPin(stop.participant_id, driverId)}
+                  disabled={pinBusy}
+                />
+              </li>
+            ))}
+          </ol>
 
-      <footer className="mt-4 border-t border-line pt-3">
-        {directionsHref ? (
-          <a
-            href={directionsHref}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="text-xs text-accent hover:underline"
-          >
-            Open this leg in Google Maps ↗
-          </a>
-        ) : (
-          <p className="text-xs text-ink-muted">
-            No directions link — someone on this leg has no coordinates on the roster. A link that
-            quietly skipped them would send the driver past a house without stopping.
-          </p>
-        )}
-      </footer>
+          <footer className="mt-3 border-t border-line pt-2.5">
+            {directionsHref ? (
+              <a
+                href={directionsHref}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-xs text-accent hover:underline"
+              >
+                Open this leg in Google Maps ↗
+              </a>
+            ) : (
+              <p className="text-xs text-ink-muted">
+                No directions link — someone on this leg has no coordinates on the roster. A link
+                that quietly skipped them would send the driver past a house without stopping.
+              </p>
+            )}
+          </footer>
+        </>
+      )}
     </article>
   );
 }

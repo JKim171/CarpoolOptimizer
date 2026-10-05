@@ -17,7 +17,7 @@ import { PickupMap } from "@/components/roster/PickupMap";
 import { AddParticipantForm } from "@/components/roster/AddParticipantForm";
 import { PasteRoster } from "@/components/roster/PasteRoster";
 import { RosterTable } from "@/components/roster/RosterTable";
-import { Detail, Notice, Page, Panel, Problem, Section } from "@/components/ui/controls";
+import { Badge, Detail, Notice, Page, Panel, Problem, Section } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import { eventKeys, fetchEvent } from "@/lib/api/events";
 import {
@@ -110,26 +110,33 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
       {event.isSuccess && (
         <>
           <header className="flex flex-col gap-5">
+            {/*
+              The handle, the status and the roster count are facts *about* the event rather than
+              details of it, and as `Detail` cells they carried the same weight as the destination
+              and the arrival time -- "Status: open" is not a third of what this header has to say.
+              As chips beside the title they are available without competing.
+            */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
                 {event.data.name}
               </h1>
-              <span className="rounded-md bg-surface-sunken px-2 py-1 font-mono text-xs text-ink-muted">
-                {publicId}
-              </span>
+              <Badge mono>{publicId}</Badge>
+              <Badge>{event.data.status}</Badge>
+              <Badge>
+                {people.length} of {MAX_PARTICIPANTS} on the roster
+              </Badge>
             </div>
-            <dl className="grid gap-5 rounded-lg border border-line bg-surface-raised p-5 sm:grid-cols-2 lg:grid-cols-3">
+            {/*
+              Three cells, not six. The time zone was its own row and is redundant: `formatInZone`
+              already prints the abbreviation on both times, which is the form anybody reads it in.
+            */}
+            <dl className="grid gap-5 rounded-lg border border-line bg-surface-raised p-5 sm:grid-cols-3">
               <Detail label="Destination">{event.data.destination.address}</Detail>
               <Detail label="Everyone arrives by">
                 {formatInZone(new Date(event.data.arrival_at), event.data.timezone)}
               </Detail>
               <Detail label="Event ends">
                 {formatInZone(new Date(event.data.ends_at), event.data.timezone)}
-              </Detail>
-              <Detail label="Time zone">{event.data.timezone}</Detail>
-              <Detail label="Status">{event.data.status}</Detail>
-              <Detail label="On the roster">
-                {people.length} of {MAX_PARTICIPANTS}
               </Detail>
             </dl>
           </header>

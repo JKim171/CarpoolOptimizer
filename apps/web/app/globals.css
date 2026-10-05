@@ -21,6 +21,12 @@
   --accent: #1d4ed8;
   --accent-hover: #1e40af;
   --accent-ink: #ffffff;
+  /* A tinted chip, not a fill: `accent-ink` is the text *on* `accent`, which is the opposite
+     relationship. Used where a value has to be picked out of a dense column -- the driver badge in
+     a fifty-row roster -- without carrying a button's weight. Both pairs clear 7:1, which small
+     bold text at `text-xs` needs. */
+  --accent-soft: #eef3ff;
+  --accent-soft-ink: #1e40af;
   --danger-surface: #fef2f2;
   --danger-ink: #991b1b;
   /* Warn had ink only, which was enough while it was one line of text. The unassigned block is a
@@ -42,6 +48,8 @@
     --accent: #3b82f6;
     --accent-hover: #60a5fa;
     --accent-ink: #0d0d0f;
+    --accent-soft: #16233d;
+    --accent-soft-ink: #93c5fd;
     --danger-surface: #2a1213;
     --danger-ink: #fca5a5;
     --warn-surface: #241a06;
@@ -61,6 +69,8 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-ink: var(--accent-soft-ink);
   --color-danger-surface: var(--danger-surface);
   --color-danger-ink: var(--danger-ink);
   --color-warn-surface: var(--warn-surface);

@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 
-import { Button, Problem, Select, TextInput } from "@/components/ui/controls";
+import { Badge, Button, Problem, Select, TextInput } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import { resolve } from "@/lib/api/geocode";
 import type { Participant, ParticipantPatch } from "@/lib/api/participants";
@@ -217,8 +217,19 @@ export function RosterTable({
                     <>
                       <td className="py-2.5 pr-3 font-medium text-ink">{person.display_name}</td>
                       <td className="py-2.5 pr-3 text-ink-muted">{person.pickup.address}</td>
-                      <td className="py-2.5 pr-3 text-ink-muted">
-                        {person.role === "driver" ? "Driver" : "Passenger"}
+                      {/*
+                        Who can drive is the one thing this table is consulted for -- it decides
+                        whether a roster can be solved at all -- and as muted text it was identical
+                        to the address beside it, so counting the drivers meant reading every row.
+                        Only the driver is badged: a chip on all twelve rows is a second column of
+                        decoration, and "passenger" is the default this product assumes.
+                      */}
+                      <td className="py-2.5 pr-3">
+                        {person.role === "driver" ? (
+                          <Badge tone="accent">Driver</Badge>
+                        ) : (
+                          <span className="text-ink-muted">Passenger</span>
+                        )}
                       </td>
                       <td className="py-2.5 pr-3 text-right tabular-nums text-ink-muted">
                         {person.role === "driver" ? person.seats_available : "—"}
