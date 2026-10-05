@@ -194,7 +194,7 @@ export function ResultsPanel({
       <div className="flex flex-col gap-3">
         <Rule />
         <SectionHeading
-          title="Who drives whom"
+          title="Who drives who"
           meta={job.data ? describeJob(job.data) : undefined}
           actions={
             <Button onClick={() => start.mutate()} disabled={busy || people.length === 0}>
