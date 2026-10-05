@@ -16,10 +16,11 @@
  *    nothing: a border around a thing that nobody was going to confuse with its neighbour is
  *    decoration. Sections are divided by a hairline and by space. The surviving boxes are the ones
  *    that genuinely contain something you can act on -- an input, the warn block.
- *  - **Type scale.** Page title `font-display text-4xl/5xl`, section heading `font-display
- *    text-2xl`, sub-heading `font-display text-lg`, body `text-[15px]`, dense rows and meta
- *    `text-sm`/`text-xs`. Display is always the serif, never bolded -- `Instrument Serif` has one
- *    weight, and hierarchy comes from size, not from piling on `font-bold`.
+ *  - **Type scale.** Page title `font-display text-3xl/4xl`, section heading `font-display
+ *    text-xl`, sub-heading `font-display text-base`, body `text-[15px]`, dense rows and meta
+ *    `text-sm`/`text-xs`. There is one family, so `font-display` is a *treatment* rather than a
+ *    face -- it sets weight and tracking, defined once in `globals.css`. Never add `font-bold`
+ *    beside it; that is the thing it exists to decide.
  *  - **Labels are set in sentence case, not `uppercase tracking-wide`.** Tiny letterspaced capitals
  *    on every label is the other tell of a generated interface, and it costs legibility for
  *    nothing. A label is small and quiet; that is enough to make it a label.
@@ -176,7 +177,7 @@ export function Panel({
 }) {
   return (
     <div className={`rounded-[2px] border border-line bg-surface-raised p-5 ${className}`}>
-      {title && <h3 className="mb-4 font-display text-lg text-ink">{title}</h3>}
+      {title && <h3 className="mb-4 font-display text-base text-ink">{title}</h3>}
       {children}
     </div>
   );
@@ -199,7 +200,7 @@ export function SectionHeading({
 }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-      <h2 className="font-display text-2xl text-ink">{title}</h2>
+      <h2 className="font-display text-xl text-ink">{title}</h2>
       {(meta || actions) && (
         <div className="flex items-center gap-3">
           {meta && <span className="text-xs text-ink-muted">{meta}</span>}

@@ -1,34 +1,27 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Instrument_Serif, Source_Sans_3 } from "next/font/google";
+import { IBM_Plex_Mono, Karla } from "next/font/google";
 
 import { Providers } from "./providers";
 import "./globals.css";
 
 /**
- * Three faces, each with one job.
+ * One family, doing everything.
  *
- * The scaffold shipped Geist and Geist Mono, which are the `create-next-app` defaults and read as
- * exactly that -- the app looked generated because, typographically, it was. What this screen
- * actually resembles is a printed timetable: a roster, a set of departure times, a destination.
- * So it is set like one.
+ * The scaffold shipped Geist and Geist Mono -- the `create-next-app` defaults -- so the app looked
+ * generated because, typographically, it was. The first attempt at a fix went the other way and
+ * set the display line in `Instrument Serif`, a high-contrast display serif. That was too
+ * mannered: hairline strokes at a heading size read as delicate rather than confident, and a
+ * serif/sans split is a second system to keep in agreement for no benefit this app collects.
  *
- * `Instrument Serif` carries the display line -- page titles, section headings, a driver's name,
- * the figures in the result summary. It ships one weight and an italic, which is the right
- * constraint for display type: hierarchy comes from size and spacing rather than from six weights.
- * `Source Sans 3` is the text face, and does everything a reader's eye moves through quickly --
- * body, labels, controls, table rows. `IBM Plex Mono` is reserved for machine handles, where a
- * reader compares characters rather than reading words.
+ * `Karla` replaces both. It is a humanist sans with warmth in its letterforms and enough character
+ * at large sizes to carry a heading without a second face -- so hierarchy comes from size and
+ * weight alone, which is one decision instead of two. `IBM Plex Mono` stays, for machine handles
+ * only, where a reader compares characters rather than reading words.
  *
  * Times are deliberately NOT mono: they are set in the text face with `tabular-nums`, which is
  * what a timetable does. Lining tabular figures align in a column without the typewriter texture.
  */
-const display = Instrument_Serif({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
-});
-const text = Source_Sans_3({ variable: "--font-text", subsets: ["latin"] });
+const sans = Karla({ variable: "--font-text", subsets: ["latin"] });
 const mono = IBM_Plex_Mono({ variable: "--font-mono", subsets: ["latin"], weight: ["400", "500"] });
 
 export const metadata: Metadata = {
@@ -41,10 +34,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${display.variable} ${text.variable} ${mono.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
       {/*
         `overflow-x-clip`, not `hidden`: the full-bleed map escapes the content column by the usual
         `left-1/2 w-screen -translate-x-1/2`, and `100vw` includes the scrollbar gutter, so without

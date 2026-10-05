@@ -66,7 +66,7 @@ export function RouteCard({
       style={{ boxShadow: `inset 3px 0 0 0 ${color}` }}
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="font-display text-xl text-ink">{route.driver_name} drives</h3>
+        <h3 className="font-display text-lg text-ink">{route.driver_name} drives</h3>
         <p className="text-sm tabular-nums text-ink-muted">
           {route.seats_used} {route.seats_used === 1 ? "rider" : "riders"} ·{" "}
           {formatDuration(route.total_duration_s)} · {formatDistance(route.total_distance_m)} ·{" "}

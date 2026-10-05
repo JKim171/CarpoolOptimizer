@@ -67,31 +67,34 @@ export function CreateEventForm() {
   }
 
   return (
-    // Capped, like the add-a-person form: at the page's full measure an event *name* field ran
-    // eight hundred pixels and read as a textarea. The map below it is the one thing here that
-    // wants the width.
-    <form onSubmit={submit} className="flex max-w-2xl flex-col gap-5">
-      <Field label="Event name">
-        <TextInput
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Tuesday practice"
-          required
-          maxLength={200}
-        />
-      </Field>
+    // The *fields* are capped, not the form: at the page's full measure an event name field ran
+    // eight hundred pixels and read as a textarea. The map is the exception and keeps the whole
+    // measure, for the same reason it does on the results screen -- it is the one element here
+    // that is better the bigger it is, because it is the thing being checked.
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      <div className="flex max-w-2xl flex-col gap-5">
+        <Field label="Event name">
+          <TextInput
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Tuesday practice"
+            required
+            maxLength={200}
+          />
+        </Field>
 
-      <AddressField
-        label="Destination"
-        placeholder="500 E Liberty St, Ann Arbor, MI"
-        value={address}
-        onChange={setAddress}
-        onPick={pick}
-      />
+        <AddressField
+          label="Destination"
+          placeholder="500 E Liberty St, Ann Arbor, MI"
+          value={address}
+          onChange={setAddress}
+          onPick={pick}
+        />
+      </div>
 
       <DestinationMap point={point} onMove={setPoint} />
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid max-w-2xl gap-5 sm:grid-cols-2">
         <Field label="Everyone arrives by">
           <TextInput
             type="datetime-local"
@@ -110,18 +113,20 @@ export function CreateEventForm() {
         </Field>
       </div>
 
-      <Field
-        label="Time zone"
-        hint="Times above are read as the clock in this zone, so the event survives a daylight-saving change."
-      >
-        <Select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>
-          {knownTimeZones().map((zone) => (
-            <option key={zone} value={zone}>
-              {zone}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <div className="max-w-2xl">
+        <Field
+          label="Time zone"
+          hint="Times above are read as the clock in this zone, so the event survives a daylight-saving change."
+        >
+          <Select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>
+            {knownTimeZones().map((zone) => (
+              <option key={zone} value={zone}>
+                {zone}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
 
       {problem && <Problem>{problem}</Problem>}
 

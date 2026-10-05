@@ -31,7 +31,7 @@ function Stat({
     <div className="flex flex-col-reverse">
       <dt className="mt-0.5 text-sm text-ink-muted">{label}</dt>
       <dd
-        className={`font-display text-4xl tabular-nums ${
+        className={`font-display text-3xl tabular-nums ${
           tone === "warn" ? "text-warn-ink" : "text-ink"
         }`}
       >

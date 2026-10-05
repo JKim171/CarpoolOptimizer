@@ -17,7 +17,8 @@ import { Map as MapLibreMap, Marker, NavigationControl, type GeoJSONSource } fro
 import { useEffect, useRef, useState } from "react";
 
 import { FALLBACK_CENTER, STYLE } from "@/components/map/basemap";
-import { DESTINATION_COLOR, routeColor } from "@/lib/results/colors";
+import { homePin, stopPin, venuePin } from "@/components/map/markers";
+import { routeColor } from "@/lib/results/colors";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -37,44 +38,6 @@ export type Venue = { address: string; lat: number; lng: number };
 
 const SOURCE = "routes";
 const LAYER = "route-lines";
-
-function dot(color: string, label: string, text: string): HTMLDivElement {
-  const el = document.createElement("div");
-  el.style.cssText = [
-    "display:flex",
-    "align-items:center",
-    "justify-content:center",
-    "width:22px",
-    "height:22px",
-    "border-radius:9999px",
-    `background:${color}`,
-    "border:2px solid white",
-    "box-shadow:0 1px 3px rgba(0,0,0,.4)",
-    "color:white",
-    "font:600 11px/1 ui-sans-serif,system-ui,sans-serif",
-  ].join(";");
-  el.textContent = text;
-  el.title = label;
-  return el;
-}
-
-/** The venue is a rounded square, so it is distinguishable without relying on colour alone. */
-function venueMarker(label: string): HTMLDivElement {
-  const el = dot(DESTINATION_COLOR, label, "");
-  el.style.borderRadius = "4px";
-  el.style.width = "18px";
-  el.style.height = "18px";
-  return el;
-}
-
-/** A driver's home: the same colour as their car, hollow, so it is not mistaken for a pickup. */
-function homeMarker(color: string, label: string): HTMLDivElement {
-  const el = dot("white", label, "");
-  el.style.border = `3px solid ${color}`;
-  el.style.width = "16px";
-  el.style.height = "16px";
-  return el;
-}
 
 /**
  * The path a car drives on this leg: home to each stop to the venue, or the reverse on the return.
@@ -197,7 +160,7 @@ export function RouteMap({
 
     if (venue) {
       markers.current.push(
-        new Marker({ element: venueMarker(`Destination — ${venue.address}`) })
+        new Marker({ element: venuePin(`Destination — ${venue.address}`) })
           .setLngLat([venue.lng, venue.lat])
           .addTo(instance),
       );
@@ -207,7 +170,7 @@ export function RouteMap({
       const color = routeColor(index);
       if (route.home) {
         markers.current.push(
-          new Marker({ element: homeMarker(color, `${route.driverName} (home)`) })
+          new Marker({ element: homePin(color, `${route.driverName} (home)`) })
             .setLngLat([route.home.lng, route.home.lat])
             .addTo(instance),
         );
@@ -215,7 +178,7 @@ export function RouteMap({
       route.stops.forEach((stop) => {
         markers.current.push(
           new Marker({
-            element: dot(color, `${stop.label} — ${route.driverName}`, String(stop.number)),
+            element: stopPin(color, `${stop.label} — ${route.driverName}`, stop.number),
           })
             .setLngLat([stop.lng, stop.lat])
             .addTo(instance),

@@ -117,7 +117,7 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
               As chips beside the title they are available without competing.
             */}
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-              <h1 className="font-display text-4xl text-ink sm:text-5xl">{event.data.name}</h1>
+              <h1 className="font-display text-3xl text-ink sm:text-4xl">{event.data.name}</h1>
               <Badge mono>{publicId}</Badge>
               <Badge>{event.data.status}</Badge>
               <Badge>

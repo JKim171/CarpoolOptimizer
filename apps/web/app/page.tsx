@@ -25,7 +25,7 @@ export default function Home() {
   return (
     <Page>
       <header className="max-w-2xl">
-        <h1 className="font-display text-5xl text-ink sm:text-6xl">CarpoolOptimizer</h1>
+        <h1 className="font-display text-4xl text-ink sm:text-5xl">CarpoolOptimizer</h1>
         <p className="mt-3 text-lg leading-relaxed text-ink-muted">
           Enter a roster, get an assignment: who drives whom, in what pickup order, out and back.
         </p>

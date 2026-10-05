@@ -86,7 +86,6 @@
   --color-warn-line: var(--warn-line);
   --color-warn-ink: var(--warn-ink);
 
-  --font-display: var(--font-display), ui-serif, Georgia, serif;
   --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;
 }
@@ -98,14 +97,19 @@ body {
 }
 
 /**
- * Display type is set tight and optically a touch smaller than its box.
+ * The display treatment, as one class rather than one typeface.
  *
- * `Instrument Serif` is a high-contrast display face drawn for large sizes; at its default tracking
- * a heading looks loose beside the text face. This is the one global type rule, so a heading cannot
- * be set two different ways on two screens.
+ * There is a single family now, so "this is a heading" is a weight and a tracking rather than a
+ * different font. Setting both here means a heading cannot be set two different ways on two
+ * screens, and `font-display` keeps meaning the same thing it did when it was a serif -- the call
+ * sites did not have to change.
+ *
+ * Tracking is negative because a sans at heading sizes sets loose by default; the larger the size,
+ * the more it needs closing up.
  */
 .font-display {
-  letter-spacing: -0.015em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 /**

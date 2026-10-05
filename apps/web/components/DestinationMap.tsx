@@ -19,6 +19,7 @@ import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import { FALLBACK_CENTER, STYLE } from "@/components/map/basemap";
+import { venuePin } from "@/components/map/markers";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -81,7 +82,13 @@ export function DestinationMap({
     if (!instance || !point) return;
 
     if (!marker.current) {
-      marker.current = new Marker({ draggable: true, color: "#1d4ed8" })
+      // The same red square the destination gets on both event-page maps. This was MapLibre's
+      // default teardrop in `#1d4ed8`, which is the *first car's* colour -- so the venue was drawn
+      // in the one palette `routeColor` excludes precisely so that it never could be.
+      marker.current = new Marker({
+        draggable: true,
+        element: venuePin("Destination — drag to the exact meeting point"),
+      })
         .setLngLat([point.lng, point.lat])
         .addTo(instance);
       marker.current.on("dragend", () => {
@@ -98,11 +105,11 @@ export function DestinationMap({
     <div className={className}>
       <div
         ref={container}
-        className="h-64 w-full overflow-hidden rounded-[2px] border border-line bg-surface-sunken"
+        className="h-96 w-full overflow-hidden rounded-[2px] border border-line bg-surface-sunken"
         role="application"
         aria-label="Destination location. Drag the marker to correct it."
       />
-      <p className="mt-1 text-xs text-ink-muted">
+      <p className="mt-1.5 text-xs text-ink-muted">
         {failed
           ? "The map could not load. You can still enter an address and coordinates below."
           : point

@@ -34,7 +34,7 @@ export function UnassignedList({
     // be found by someone skimming past four cars that worked, and on paper that is what a tinted
     // panel is for.
     <section className="border-l-2 border-warn-line bg-warn-surface p-5">
-      <h3 className="font-display text-xl text-warn-ink">
+      <h3 className="font-display text-lg text-warn-ink">
         {unassigned.length} {unassigned.length === 1 ? "person has" : "people have"} no ride
       </h3>
       <ul className="mt-3 flex flex-col gap-2.5">

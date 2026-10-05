@@ -21,6 +21,7 @@ import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import { FALLBACK_CENTER, STYLE } from "@/components/map/basemap";
+import { personPin, venuePin } from "@/components/map/markers";
 import type { LocatedParticipant } from "@/lib/api/participants";
 
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -29,30 +30,13 @@ export type Destination = { address: string; lat: number; lng: number };
 
 /**
  * Marker colours carry meaning: drivers are the scarce resource a coordinator is counting, and the
- * destination is not a person. Read off the same palette the rest of the app uses.
+ * destination is not a person. Shapes carry it too -- see `components/map/markers.ts`, which owns
+ * the vocabulary so that the three maps in this app cannot disagree about it.
  */
 const COLOR = {
   driver: "#1d4ed8",
   passenger: "#63636d",
-  destination: "#991b1b",
 } as const;
-
-function markerElement(color: string, label: string): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = "carpool-pin";
-  el.style.cssText = [
-    "width:18px",
-    "height:18px",
-    "border-radius:9999px",
-    `background:${color}`,
-    "border:2px solid white",
-    "box-shadow:0 1px 3px rgba(0,0,0,.4)",
-    "cursor:pointer",
-    "transition:transform 120ms",
-  ].join(";");
-  el.title = label;
-  return el;
-}
 
 export function PickupMap({
   participants,
@@ -124,7 +108,7 @@ export function PickupMap({
     if (!instance || !ready || !destination) return;
     if (!destinationMarker.current) {
       destinationMarker.current = new Marker({
-        element: markerElement(COLOR.destination, `Destination — ${destination.address}`),
+        element: venuePin(`Destination — ${destination.address}`, "carpool-pin"),
       })
         .setLngLat([destination.lng, destination.lat])
         .addTo(instance);
@@ -150,9 +134,10 @@ export function PickupMap({
         continue;
       }
 
-      const element = markerElement(
+      const element = personPin(
         person.role === "driver" ? COLOR.driver : COLOR.passenger,
         `${person.display_name} — ${person.pickup.address}`,
+        "carpool-pin",
       );
       element.addEventListener("mouseenter", () => highlightHandler.current(person.id));
       element.addEventListener("mouseleave", () => highlightHandler.current(null));
