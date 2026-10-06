@@ -126,6 +126,12 @@ export function Notice({ children }: { children: ReactNode }) {
  * column that changes what the row *means* -- a driver among passengers -- and is deliberately the
  * only tone that tints, so that a table with one badge per row still reads as a table. `plain` is
  * the same chip without the claim to attention.
+ *
+ * Both tones carry full-strength ink, and `plain` makes its point with the absence of a tint rather
+ * than with grey text. `--ink-muted` here read as 4.98:1 -- past AA, but short of the 7:1 this
+ * project holds `text-xs` to, and odd beside an `accent` chip of the same size at 9.8:1. A handle
+ * like `tfr5zmnypv` is compared character by character and sometimes read aloud, which is the worst
+ * case for faint small type.
  */
 export function Badge({
   tone = "plain",
@@ -138,7 +144,7 @@ export function Badge({
   children: ReactNode;
 }) {
   const look =
-    tone === "accent" ? "bg-accent-soft text-accent-soft-ink" : "bg-surface-sunken text-ink-muted";
+    tone === "accent" ? "bg-accent-soft text-accent-soft-ink" : "bg-surface-sunken text-ink";
   return (
     <span
       className={`inline-flex items-center rounded-[2px] px-1.5 py-0.5 text-xs ${
