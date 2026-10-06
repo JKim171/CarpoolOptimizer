@@ -128,11 +128,21 @@ export function CreateEventForm() {
         </Field>
       </div>
 
-      {problem && <Problem>{problem}</Problem>}
+      {/* In the field measure, not the map's: an error about the form belongs with the form. */}
+      {problem && (
+        <div className="max-w-2xl">
+          <Problem>{problem}</Problem>
+        </div>
+      )}
 
-      <Button type="submit" disabled={create.isPending}>
-        {create.isPending ? "Creating…" : "Create event"}
-      </Button>
+      {/* The wrapper is load-bearing: the form is a column flexbox, so a bare child stretches to
+          the full measure -- which the map wants and a button does not. Same shape as
+          `AddParticipantForm`, where the submit sits in a plain div for this reason. */}
+      <div>
+        <Button type="submit" disabled={create.isPending}>
+          {create.isPending ? "Creating…" : "Create event"}
+        </Button>
+      </div>
     </form>
   );
 }
