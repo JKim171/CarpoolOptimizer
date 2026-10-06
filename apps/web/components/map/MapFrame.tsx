@@ -35,8 +35,18 @@ export function MapFrame({
 
       {overlay && <div className="absolute left-4 top-4 z-10 flex flex-col gap-2">{overlay}</div>}
 
+      {/*
+        Full-strength ink, not `--ink-muted`.
+
+        This is `text-xs`, which this project holds to 7:1, and muted ink over the plate measured
+        5.44:1 in light and 6.11:1 in dark -- past AA, short of the bar, and the same miss session 18
+        found in `Badge`. The fix there was to darken rather than to narrow the claim, and it applies
+        twice over here: a caption sitting on a *map* has a varying ground under a translucent
+        plate, which is the worst case for faint small type. The quiet comes from the size and the
+        corner it sits in, not from greying the text.
+      */}
       {caption && (
-        <p className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-md rounded-[2px] bg-surface/85 px-2 py-1 text-xs text-ink-muted">
+        <p className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-md rounded-[2px] bg-surface/90 px-2 py-1 text-xs text-ink">
           {caption}
         </p>
       )}
