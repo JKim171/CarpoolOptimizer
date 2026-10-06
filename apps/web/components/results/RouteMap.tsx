@@ -19,7 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
 import { MapFrame } from "@/components/map/MapFrame";
 import { homePin, stopPin, venuePin } from "@/components/map/markers";
-import { useColorScheme } from "@/lib/colorScheme";
+import { useLiveColorScheme } from "@/lib/colorScheme";
 import { routeColor } from "@/lib/results/colors";
 
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -102,7 +102,7 @@ export function RouteMap({
   const markers = useRef<Marker[]>([]);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
-  const scheme = useColorScheme();
+  const scheme = useLiveColorScheme();
   /** Which basemap the live instance is actually showing, so the effect below is a no-op at mount. */
   const applied = useRef(scheme);
 

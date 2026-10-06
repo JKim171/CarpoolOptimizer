@@ -53,3 +53,26 @@ export function useColorScheme(): ColorScheme {
     colorSchemeServerSnapshot,
   );
 }
+
+/**
+ * The same preference, but never the server's placeholder -- for imperative code.
+ *
+ * `useColorScheme` has to return `light` on the hydration render whatever the browser prefers,
+ * because that render must reproduce the server's HTML exactly. For anything *rendered* that is
+ * correct and self-correcting: React re-renders with the real value immediately afterwards.
+ *
+ * For the maps it is not, because they do not render their contents -- they build a MapLibre
+ * instance in an effect, and anything captured in a ref during that first render is captured for
+ * good. Seeding the basemap from it meant **every page load on a dark machine fetched `positron`
+ * first and then swapped to `dark`**: a wasted style request and a visible flash of a light map on
+ * a dark page, which is precisely the thing the dark basemap exists to avoid.
+ *
+ * So: subscribe through the hook, to re-render when the preference actually changes, and report the
+ * live value. Use this wherever the answer feeds an effect or a ref. Use `useColorScheme` wherever
+ * it feeds JSX -- `RouteCard` sets an inline colour from it, and reading the live value there would
+ * be a genuine hydration mismatch.
+ */
+export function useLiveColorScheme(): ColorScheme {
+  useColorScheme();
+  return colorSchemeSnapshot();
+}

@@ -24,7 +24,7 @@ import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
 import { MapFrame } from "@/components/map/MapFrame";
 import { personPin, venuePin } from "@/components/map/markers";
 import type { LocatedParticipant } from "@/lib/api/participants";
-import { useColorScheme, type ColorScheme } from "@/lib/colorScheme";
+import { useLiveColorScheme, type ColorScheme } from "@/lib/colorScheme";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -66,7 +66,7 @@ export function PickupMap({
   const destinationMarker = useRef<Marker | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
-  const scheme = useColorScheme();
+  const scheme = useLiveColorScheme();
   /** Which basemap the live instance is actually showing, so the effect below is a no-op at mount. */
   const applied = useRef(scheme);
 

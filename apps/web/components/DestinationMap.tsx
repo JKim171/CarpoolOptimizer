@@ -21,7 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
 import { MapFrame } from "@/components/map/MapFrame";
 import { venuePin } from "@/components/map/markers";
-import { useColorScheme } from "@/lib/colorScheme";
+import { useLiveColorScheme } from "@/lib/colorScheme";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -47,7 +47,7 @@ export function DestinationMap({
   }, [onMove]);
 
   const [failed, setFailed] = useState(false);
-  const scheme = useColorScheme();
+  const scheme = useLiveColorScheme();
   /** Which basemap the live instance is showing, so the effect below is a no-op at mount. */
   const applied = useRef(scheme);
 
