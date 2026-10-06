@@ -26,7 +26,7 @@ const mono = IBM_Plex_Mono({ variable: "--font-mono", subsets: ["latin"], weight
 
 export const metadata: Metadata = {
   title: "CarpoolOptimizer",
-  description: "Decide who drives whom, in what order, out and back.",
+  description: "Decide who drives who, in what order, out and back.",
   // Event pages are reachable only with an organizer token, and their URLs carry a public id that
   // should not end up in a search index.
   robots: { index: false, follow: false },
