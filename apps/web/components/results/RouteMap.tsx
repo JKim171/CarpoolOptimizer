@@ -131,7 +131,10 @@ export function RouteMap({
     const source = instance.getSource<GeoJSONSource>(SOURCE);
     if (!source) return;
 
-    const dimmed = highlightedRouteId !== null;
+    // Dim only for a highlight that names a car actually on this map. A re-optimize replaces every
+    // route id, so a highlight held across one would otherwise match nothing and fade *all* of
+    // them at once -- the same misleading picture a stale highlight gives, arrived at the other way.
+    const dimmed = routes.some((route) => route.routeId === highlightedRouteId);
     source.setData({
       type: "FeatureCollection",
       features: routes.map((route, index) => {

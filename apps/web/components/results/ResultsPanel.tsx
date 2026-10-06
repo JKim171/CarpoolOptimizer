@@ -44,6 +44,7 @@ import { ResultSummary } from "./ResultSummary";
 import { RouteCard } from "./RouteCard";
 import { RouteMap, type MappedRoute } from "./RouteMap";
 import { UnassignedList } from "./UnassignedList";
+import { useHoverHighlight } from "./useHoverHighlight";
 
 export type Venue = { address: string; lat: number; lng: number };
 
@@ -66,7 +67,7 @@ export function ResultsPanel({
   const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<string | null>(null);
   const [leg, setLeg] = useState<LegChoice>("outbound");
-  const [highlightedRouteId, setHighlightedRouteId] = useState<string | null>(null);
+  const [highlightedRouteId, setHighlightedRouteId] = useHoverHighlight();
   const [conflict, setConflict] = useState<string | null>(null);
 
   const start = useMutation({

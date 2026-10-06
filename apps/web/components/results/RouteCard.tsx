@@ -58,6 +58,9 @@ export function RouteCard({
     // carried by a bar in the left margin, which is also the only thing tying this block to a line
     // on the map, so it wants more presence than the 10px dot it was.
     <article
+      // Read back by `useHoverHighlight` after a scroll, which is the case these two handlers
+      // cannot see: the pointer stays put and the cards move under it.
+      data-route-id={route.id}
       onMouseEnter={() => onHighlight(route.id)}
       onMouseLeave={() => onHighlight(null)}
       className={`border-t border-line py-5 pl-4 transition-colors first:border-t-0 ${
