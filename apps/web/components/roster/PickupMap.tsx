@@ -20,9 +20,10 @@
 import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
-import { FALLBACK_CENTER, STYLE } from "@/components/map/basemap";
+import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
 import { personPin, venuePin } from "@/components/map/markers";
 import type { LocatedParticipant } from "@/lib/api/participants";
+import { useColorScheme, type ColorScheme } from "@/lib/colorScheme";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -32,11 +33,15 @@ export type Destination = { address: string; lat: number; lng: number };
  * Marker colours carry meaning: drivers are the scarce resource a coordinator is counting, and the
  * destination is not a person. Shapes carry it too -- see `components/map/markers.ts`, which owns
  * the vocabulary so that the three maps in this app cannot disagree about it.
+ *
+ * Two sets, for the two basemaps, on the same reasoning as `lib/results/colors.ts`: these sit on
+ * tiles rather than on the page. The driver blue tracks the first car's colour in each palette, so
+ * a driver on the roster map and car one on the results map are recognisably the same blue.
  */
-const COLOR = {
-  driver: "#1d4ed8",
-  passenger: "#63636d",
-} as const;
+const COLOR: Record<ColorScheme, { driver: string; passenger: string }> = {
+  light: { driver: "#1d4ed8", passenger: "#63636d" },
+  dark: { driver: "#60a5fa", passenger: "#9ca3af" },
+};
 
 export function PickupMap({
   participants,
@@ -59,6 +64,9 @@ export function PickupMap({
   const destinationMarker = useRef<Marker | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  const scheme = useColorScheme();
+  /** Which basemap the live instance is actually showing, so the effect below is a no-op at mount. */
+  const applied = useRef(scheme);
 
   // Callbacks are new functions every render while marker handlers are bound once, so they are read
   // through refs. Assigned in an effect -- a ref written during render is not guaranteed to survive
@@ -78,13 +86,15 @@ export function PickupMap({
 
     const instance = new MapLibreMap({
       container: container.current,
-      style: STYLE,
+      style: styleFor(applied.current),
       center: destination ? [destination.lng, destination.lat] : FALLBACK_CENTER,
       zoom: 11,
       attributionControl: { compact: true },
     });
     instance.addControl(new NavigationControl({ showCompass: false }), "top-right");
-    instance.on("load", () => setReady(true));
+    // `style.load`, not `load`: it fires for the first style and for every one `setStyle` swaps in,
+    // so `ready` tracks the live style rather than only the first.
+    instance.on("style.load", () => setReady(true));
     instance.on("error", (event) => {
       if (event.error?.message?.includes("style")) setFailed(true);
     });
@@ -102,20 +112,41 @@ export function PickupMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Swap the basemap when the system theme changes under a running page.
+   *
+   * Markers are DOM overlays, so `setStyle` does not touch them -- but they are built with the
+   * theme's colours baked into an inline `style`, and the reconcile effect below deliberately
+   * leaves an existing marker alone. Dropping them here is what makes that effect rebuild them in
+   * the new palette; it is the one case where "the roster did not change" is not a reason to keep
+   * the pin that is already there.
+   */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || applied.current === scheme) return;
+    applied.current = scheme;
+    markers.current.forEach((marker) => marker.remove());
+    markers.current.clear();
+    destinationMarker.current?.remove();
+    destinationMarker.current = null;
+    setReady(false);
+    instance.setStyle(styleFor(scheme));
+  }, [scheme]);
+
   // Destination pin, kept separate from the roster so it is not re-created on every roster change.
   useEffect(() => {
     const instance = map.current;
     if (!instance || !ready || !destination) return;
     if (!destinationMarker.current) {
       destinationMarker.current = new Marker({
-        element: venuePin(`Destination — ${destination.address}`, "carpool-pin"),
+        element: venuePin(scheme, `Destination — ${destination.address}`, "carpool-pin"),
       })
         .setLngLat([destination.lng, destination.lat])
         .addTo(instance);
     } else {
       destinationMarker.current.setLngLat([destination.lng, destination.lat]);
     }
-  }, [destination, ready]);
+  }, [destination, ready, scheme]);
 
   // Reconcile markers against the roster: add new people, move changed ones, remove the gone.
   useEffect(() => {
@@ -135,7 +166,8 @@ export function PickupMap({
       }
 
       const element = personPin(
-        person.role === "driver" ? COLOR.driver : COLOR.passenger,
+        scheme,
+        person.role === "driver" ? COLOR[scheme].driver : COLOR[scheme].passenger,
         `${person.display_name} — ${person.pickup.address}`,
         "carpool-pin",
       );
@@ -157,7 +189,7 @@ export function PickupMap({
         markers.current.delete(id);
       }
     }
-  }, [participants, ready]);
+  }, [participants, ready, scheme]);
 
   // Highlight is a style change on an existing element, not a marker rebuild -- rebuilding would
   // drop a drag in progress and make hovering the table feel like the map was flickering.

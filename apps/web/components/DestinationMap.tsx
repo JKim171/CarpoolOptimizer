@@ -18,8 +18,9 @@
 import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
-import { FALLBACK_CENTER, STYLE } from "@/components/map/basemap";
+import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
 import { venuePin } from "@/components/map/markers";
+import { useColorScheme } from "@/lib/colorScheme";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -47,13 +48,16 @@ export function DestinationMap({
   }, [onMove]);
 
   const [failed, setFailed] = useState(false);
+  const scheme = useColorScheme();
+  /** Which basemap the live instance is showing, so the effect below is a no-op at mount. */
+  const applied = useRef(scheme);
 
   useEffect(() => {
     if (!container.current || map.current) return;
 
     const instance = new MapLibreMap({
       container: container.current,
-      style: STYLE,
+      style: styleFor(applied.current),
       center: point ? [point.lng, point.lat] : FALLBACK_CENTER,
       zoom: point ? 15 : 11,
       attributionControl: { compact: true },
@@ -77,6 +81,24 @@ export function DestinationMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Swap the basemap when the system theme changes under a running page.
+   *
+   * The marker is a DOM overlay and survives `setStyle`, but it carries the theme's colours in an
+   * inline `style`, so it is dropped here and rebuilt by the effect below -- which is guarded on
+   * `marker.current` being null, and now gets that. **Declared before that effect on purpose:**
+   * effects run in source order, so the other way round the rebuild would run first, find a marker
+   * still there, and leave the old colour on screen until the point next moved.
+   */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || applied.current === scheme) return;
+    applied.current = scheme;
+    marker.current?.remove();
+    marker.current = null;
+    instance.setStyle(styleFor(scheme));
+  }, [scheme]);
+
   useEffect(() => {
     const instance = map.current;
     if (!instance || !point) return;
@@ -87,7 +109,7 @@ export function DestinationMap({
       // in the one palette `routeColor` excludes precisely so that it never could be.
       marker.current = new Marker({
         draggable: true,
-        element: venuePin("Destination — drag to the exact meeting point"),
+        element: venuePin(scheme, "Destination — drag to the exact meeting point"),
       })
         .setLngLat([point.lng, point.lat])
         .addTo(instance);
@@ -99,7 +121,7 @@ export function DestinationMap({
       marker.current.setLngLat([point.lng, point.lat]);
     }
     instance.easeTo({ center: [point.lng, point.lat], zoom: Math.max(instance.getZoom(), 15) });
-  }, [point]);
+  }, [point, scheme]);
 
   return (
     <div className={className}>

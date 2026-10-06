@@ -17,6 +17,7 @@ import {
   type LegChoice,
   type Route,
 } from "@/lib/api/solutions";
+import { useColorScheme } from "@/lib/colorScheme";
 import { routeColor } from "@/lib/results/colors";
 import { formatTimeInZone } from "@/lib/time";
 
@@ -49,7 +50,8 @@ export function RouteCard({
   highlighted: boolean;
   onHighlight: (routeId: string | null) => void;
 }) {
-  const color = routeColor(index);
+  const scheme = useColorScheme();
+  const color = routeColor(index, scheme);
   const stops = legOf(route, leg).stops;
 
   return (

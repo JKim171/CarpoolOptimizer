@@ -12,25 +12,35 @@
 
 import { setWorkerUrl } from "maplibre-gl";
 
+import type { ColorScheme } from "@/lib/colorScheme";
+
 /**
- * `positron`, not `liberty`.
+ * `positron` and `dark`, not `liberty`.
  *
  * Liberty is a full-colour general-purpose basemap -- green parkland, blue water, coloured road
  * classes -- and it was competing with the only thing on the map that carries information here:
  * the eight route colours in `lib/results/colors.ts`. At a thumbnail that was tolerable. Now that
- * the map runs the full width of the window it is the loudest element on the page, and it is
- * loudest about the parts that mean nothing.
+ * the map is the canvas the whole app is laid out around, it is the loudest element on the screen,
+ * and it was loudest about the parts that mean nothing.
  *
  * Positron is the desaturated grey basemap that newspapers and data graphics use, for exactly this
- * reason: it is a ground for marks to sit on. It also suits a page set like a printed document,
- * where a map is a plate.
+ * reason: it is a ground for marks to sit on. `dark` is the same idea on the other side -- a
+ * near-black ground, `rgb(12,12,12)`, with grey road casings.
  *
- * It stays light in both themes, deliberately. The route palette is documented as chosen to be
- * legible *on a light basemap*, and a dark ground would need a second palette of eight colours
- * re-picked against it. OpenFreeMap does serve `dark`, so that remains open -- it is a palette
- * decision, not a tile-source one.
+ * **The map used to stay light in both themes**, because the route palette was chosen against a
+ * light ground and a dark one needed a second set of eight colours picked against it. That set now
+ * exists (`lib/results/colors.ts`), which is what made this switchable: it was always a palette
+ * decision rather than a tile-source one. A light plate was tolerable while the map was a rectangle
+ * in a document; filling most of a dark window, it was the design.
  */
-export const STYLE = "https://tiles.openfreemap.org/styles/positron";
+const STYLES = {
+  light: "https://tiles.openfreemap.org/styles/positron",
+  dark: "https://tiles.openfreemap.org/styles/dark",
+} as const;
+
+export function styleFor(scheme: ColorScheme): string {
+  return STYLES[scheme];
+}
 
 /** Ann Arbor, until something real recentres the view. */
 export const FALLBACK_CENTER: [number, number] = [-83.743, 42.2808];
