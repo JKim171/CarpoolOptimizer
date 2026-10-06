@@ -1,23 +1,42 @@
 "use client";
 
+/**
+ * The new-event form, as the rail half of a map-and-panel screen.
+ *
+ * **The destination map used to be inside this form.** It is now the shell's canvas, so the point
+ * being picked is state this component no longer owns -- it is lifted to the home screen, which
+ * renders both halves. That is the same split the event screen makes for the same reason: the map
+ * is the canvas, and anything both halves read belongs to the screen rather than to either one.
+ *
+ * Nothing here caps its own width any more. The rail is the measure.
+ */
+
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AddressField } from "@/components/AddressField";
-import { DestinationMap, type Point } from "@/components/DestinationMap";
+import type { Point } from "@/components/DestinationMap";
 import { Button, Field, Problem, Select, TextInput } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import { createEvent } from "@/lib/api/events";
 import type { Place } from "@/lib/api/geocode";
 import { knownTimeZones, localTimeZone, wallClockToInstant } from "@/lib/time";
 
-export function CreateEventForm() {
+export function CreateEventForm({
+  address,
+  onAddress,
+  point,
+  onPoint,
+}: {
+  address: string;
+  onAddress: (address: string) => void;
+  point: Point | null;
+  onPoint: (point: Point | null) => void;
+}) {
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [point, setPoint] = useState<Point | null>(null);
   const [timeZone, setTimeZone] = useState(localTimeZone);
   const [arrival, setArrival] = useState("");
   const [ends, setEnds] = useState("");
@@ -62,82 +81,64 @@ export function CreateEventForm() {
   }
 
   function pick(place: Place) {
-    setAddress(place.address);
-    setPoint({ lat: place.lat, lng: place.lng });
+    onAddress(place.address);
+    onPoint({ lat: place.lat, lng: place.lng });
   }
 
   return (
-    // The *fields* are capped, not the form: at the page's full measure an event name field ran
-    // eight hundred pixels and read as a textarea. The map is the exception and keeps the whole
-    // measure, for the same reason it does on the results screen -- it is the one element here
-    // that is better the bigger it is, because it is the thing being checked.
-    <form onSubmit={submit} className="flex flex-col gap-5">
-      <div className="flex max-w-2xl flex-col gap-5">
-        <Field label="Event name">
-          <TextInput
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Tuesday practice"
-            required
-            maxLength={200}
-          />
-        </Field>
-
-        <AddressField
-          label="Destination"
-          placeholder="500 E Liberty St, Ann Arbor, MI"
-          value={address}
-          onChange={setAddress}
-          onPick={pick}
+    <form onSubmit={submit} className="flex flex-col gap-4">
+      <Field label="Event name">
+        <TextInput
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Tuesday practice"
+          required
+          maxLength={200}
         />
-      </div>
+      </Field>
 
-      <DestinationMap point={point} onMove={setPoint} />
+      <AddressField
+        label="Destination"
+        placeholder="500 E Liberty St, Ann Arbor, MI"
+        value={address}
+        onChange={onAddress}
+        onPick={pick}
+      />
 
-      <div className="grid max-w-2xl gap-5 sm:grid-cols-2">
-        <Field label="Everyone arrives by">
-          <TextInput
-            type="datetime-local"
-            value={arrival}
-            onChange={(event) => setArrival(event.target.value)}
-            required
-          />
-        </Field>
-        <Field label="Event ends">
-          <TextInput
-            type="datetime-local"
-            value={ends}
-            onChange={(event) => setEnds(event.target.value)}
-            required
-          />
-        </Field>
-      </div>
+      <Field label="Everyone arrives by">
+        <TextInput
+          type="datetime-local"
+          value={arrival}
+          onChange={(event) => setArrival(event.target.value)}
+          required
+        />
+      </Field>
+      <Field label="Event ends">
+        <TextInput
+          type="datetime-local"
+          value={ends}
+          onChange={(event) => setEnds(event.target.value)}
+          required
+        />
+      </Field>
 
-      <div className="max-w-2xl">
-        <Field
-          label="Time zone"
-          hint="Times above are read as the clock in this zone, so the event survives a daylight-saving change."
-        >
-          <Select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>
-            {knownTimeZones().map((zone) => (
-              <option key={zone} value={zone}>
-                {zone}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+      <Field
+        label="Time zone"
+        hint="Times above are read as the clock in this zone, so the event survives a daylight-saving change."
+      >
+        <Select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>
+          {knownTimeZones().map((zone) => (
+            <option key={zone} value={zone}>
+              {zone}
+            </option>
+          ))}
+        </Select>
+      </Field>
 
-      {/* In the field measure, not the map's: an error about the form belongs with the form. */}
-      {problem && (
-        <div className="max-w-2xl">
-          <Problem>{problem}</Problem>
-        </div>
-      )}
+      {problem && <Problem>{problem}</Problem>}
 
       {/* The wrapper is load-bearing: the form is a column flexbox, so a bare child stretches to
-          the full measure -- which the map wants and a button does not. Same shape as
-          `AddParticipantForm`, where the submit sits in a plain div for this reason. */}
+          the full measure, which a button does not want. Same shape as `AddParticipantForm`. */}
       <div>
         <Button type="submit" disabled={create.isPending}>
           {create.isPending ? "Creating…" : "Create event"}

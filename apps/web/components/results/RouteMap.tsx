@@ -14,9 +14,10 @@
  */
 
 import { Map as MapLibreMap, Marker, NavigationControl, type GeoJSONSource } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
+import { MapFrame } from "@/components/map/MapFrame";
 import { homePin, stopPin, venuePin } from "@/components/map/markers";
 import { useColorScheme } from "@/lib/colorScheme";
 import { routeColor } from "@/lib/results/colors";
@@ -87,17 +88,14 @@ export function RouteMap({
   venue,
   leg,
   highlightedRouteId,
-  className = "h-96",
-  square = false,
+  overlay,
 }: {
   routes: MappedRoute[];
   venue: Venue | null;
   leg: "outbound" | "inbound";
   highlightedRouteId: string | null;
-  /** Sets the frame's height; the map fills it. Defaults to the height it had when it stood alone. */
-  className?: string;
-  /** Drops the frame when the map runs to the window's edges, where a border has nothing to divide. */
-  square?: boolean;
+  /** Controls drawn over the map -- the canvas's mode switch. */
+  overlay?: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -250,30 +248,15 @@ export function RouteMap({
   }, [routes, venue, ready]);
 
   return (
-    // The frame fills whatever height `className` sets, so a caller running the map to the window's
-    // edges can size it to the viewport rather than to a constant written in here.
-    <div className={`flex flex-col ${className}`}>
-      <div
-        ref={container}
-        className={`min-h-0 w-full flex-1 bg-surface-sunken ${
-          square ? "border-y border-line" : "overflow-hidden rounded-[2px] border border-line"
-        }`}
-        role="application"
-        aria-label="Each car's route, with stops numbered in pickup order."
-      />
-      {/*
-        The caption is a sentence, so it keeps the page's measure even when the map does not: a
-        line of text running the full width of a window is not something anybody reads.
-      */}
-      <p
-        className={`mt-1.5 shrink-0 text-xs text-ink-muted ${
-          square ? "mx-auto w-full max-w-5xl px-6 sm:px-8" : ""
-        }`}
-      >
-        {failed
-          ? "The map could not load. Every car and stop is listed below in order."
-          : "Lines join stops directly and are not driving directions — use a car's Google Maps link for those."}
-      </p>
-    </div>
+    <MapFrame
+      container={container}
+      label="Each car's route, with stops numbered in pickup order."
+      overlay={overlay}
+      caption={
+        failed
+          ? "The map could not load. Every car and stop is listed beside it in order."
+          : "Lines join stops directly and are not driving directions — use a car's Google Maps link for those."
+      }
+    />
   );
 }

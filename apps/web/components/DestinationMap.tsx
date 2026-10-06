@@ -19,6 +19,7 @@ import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
+import { MapFrame } from "@/components/map/MapFrame";
 import { venuePin } from "@/components/map/markers";
 import { useColorScheme } from "@/lib/colorScheme";
 
@@ -29,11 +30,9 @@ export type Point = { lat: number; lng: number };
 export function DestinationMap({
   point,
   onMove,
-  className,
 }: {
   point: Point | null;
   onMove: (point: Point) => void;
-  className?: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -124,20 +123,16 @@ export function DestinationMap({
   }, [point, scheme]);
 
   return (
-    <div className={className}>
-      <div
-        ref={container}
-        className="h-96 w-full overflow-hidden rounded-[2px] border border-line bg-surface-sunken"
-        role="application"
-        aria-label="Destination location. Drag the marker to correct it."
-      />
-      <p className="mt-1.5 text-xs text-ink-muted">
-        {failed
-          ? "The map could not load. You can still enter an address and coordinates below."
+    <MapFrame
+      container={container}
+      label="Destination location. Drag the marker to correct it."
+      caption={
+        failed
+          ? "The map could not load. You can still enter an address and coordinates in the panel."
           : point
             ? "Drag the pin to the exact meeting point — a parking entrance, not the building centre."
-            : "Choose an address to place the pin."}
-      </p>
-    </div>
+            : "Choose an address to place the pin."
+      }
+    />
   );
 }

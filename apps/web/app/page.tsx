@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { CreateEventForm } from "@/components/CreateEventForm";
-import { Page, Section } from "@/components/ui/controls";
+import { DestinationMap, type Point } from "@/components/DestinationMap";
+import { AppShell, RailSection } from "@/components/shell/AppShell";
+import { Button } from "@/components/ui/controls";
 import {
   forgetToken,
   knownEventsServerSnapshot,
@@ -22,14 +24,19 @@ export default function Home() {
     knownEventsServerSnapshot,
   );
 
-  return (
-    <Page>
-      <header className="max-w-2xl">
-        <h1 className="font-display text-4xl text-ink sm:text-5xl">CarpoolOptimizer</h1>
-        <p className="mt-3 text-lg leading-relaxed text-ink-muted">
+  // The destination being picked, owned here because both halves of the screen read it: the form
+  // in the rail submits it, the map on the canvas shows and corrects it.
+  const [address, setAddress] = useState("");
+  const [point, setPoint] = useState<Point | null>(null);
+
+  const rail = (
+    <>
+      <div className="flex flex-col gap-2 px-5 pb-5 pt-6">
+        <h1 className="font-display text-2xl text-ink">whodriveswho</h1>
+        <p className="text-[15px] leading-relaxed text-ink-muted">
           Enter a roster, get an assignment: who drives who, in what pickup order, out and back.
         </p>
-      </header>
+      </div>
 
       {/*
        * This list is whatever tokens localStorage holds, so it keeps listing an event that has
@@ -40,38 +47,45 @@ export default function Home() {
        * the organizer remove a dead row says exactly as much as the app actually knows.
        */}
       {known.length > 0 && (
-        <Section title="Your events on this device">
-          <ul className="divide-y divide-line border-y border-line">
+        <RailSection title="Your events">
+          <ul className="-mx-2 divide-y divide-line border-y border-line">
             {known.map((publicId) => (
-              <li key={publicId} className="flex items-center gap-2">
+              <li key={publicId} className="group flex items-center gap-2 px-2">
                 <Link
                   href={`/events/${publicId}`}
-                  className="flex-1 py-3 font-mono text-[15px] text-accent transition-colors hover:bg-surface-sunken"
+                  className="flex-1 truncate py-2.5 font-mono text-sm text-accent transition-colors"
                 >
                   {publicId}
                 </Link>
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => forgetToken(publicId)}
                   aria-label={`Remove ${publicId} from this device`}
                   title="Remove from this device"
-                  className="rounded-[2px] px-2 py-1 text-sm text-ink-muted transition-colors hover:text-danger-ink hover:underline"
                 >
                   Remove
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
-          <p className="max-w-2xl text-sm text-ink-muted">
+          <p className="text-xs text-ink-muted">
             Organizer tokens are kept in this browser only. On another device you will need the link
             and its token. Removing forgets the token here — it does not delete the event.
           </p>
-        </Section>
+        </RailSection>
       )}
 
-      <Section title="New event">
-        <CreateEventForm />
-      </Section>
-    </Page>
+      <RailSection title="New event">
+        <CreateEventForm
+          address={address}
+          onAddress={setAddress}
+          point={point}
+          onPoint={setPoint}
+        />
+      </RailSection>
+    </>
   );
+
+  return <AppShell rail={rail} canvas={<DestinationMap point={point} onMove={setPoint} />} />;
 }

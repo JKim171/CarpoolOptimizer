@@ -36,13 +36,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
       {/*
-        `overflow-x-clip`, not `hidden`: the full-bleed map escapes the content column by the usual
-        `left-1/2 w-screen -translate-x-1/2`, and `100vw` includes the scrollbar gutter, so without
-        this the page gains a few pixels of horizontal scroll. `clip` suppresses that without
-        making the body a scroll container, which `hidden` would -- and that would break `position:
-        sticky` anywhere inside it.
+        The shell owns the viewport and scrolls its rail internally, so the document itself never
+        scrolls. This used to be `flex min-h-full flex-col overflow-x-clip`, where the `clip` was
+        load-bearing: a full-bleed map escaped the text column with `left-1/2 w-screen
+        -translate-x-1/2`, and `100vw` includes the scrollbar gutter, which showed up as a few
+        pixels of horizontal scroll. There is no text column to escape any more.
       */}
-      <body className="flex min-h-full flex-col overflow-x-clip">
+      <body className="h-full overflow-hidden">
         <Providers>{children}</Providers>
       </body>
     </html>

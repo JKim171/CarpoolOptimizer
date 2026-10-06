@@ -1,227 +1,60 @@
 "use client";
 
 /**
- * Ask for an answer, wait for it, and show it.
+ * The answer, as a list: a summary, one card per car, and whoever is left over.
  *
- * Written against the async contract -- enqueue, poll, read the solution -- even though the API
- * solves inline today and the first response already carries a finished job. That is the seam a
- * separate worker slots into (docs/design.md 4.2), and polling a job that is already `succeeded`
- * costs one request.
+ * **The map used to be in here.** It is now the shell's canvas, a sibling rather than a child, and
+ * the state the two share lives in `useSolution`. What is left is the half you read -- which is
+ * what the rail is for, and why this is a column of text with no element in it that wants to be
+ * bigger than the column.
  *
- * The coordinates are joined in here rather than served with the solution: `StopRead` carries a
- * participant id, a name, an ETA and an address, but no lat/lng, because a solution records an
- * *ordering* and times are derived (CLAUDE.md). The roster is the source of position. That join can
- * miss -- someone cancelled since the solve still appears in it -- and where it misses this reports
- * the gap rather than quietly plotting fewer pins than there are people.
+ * The leg switch and the activate button stayed with the list rather than moving onto the map.
+ * Both change what the *answer* is rather than how it is drawn, and a control floating over a map
+ * reads as a map control.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-
-import { Bleed, Button, Notice, Problem, Rule, SectionHeading } from "@/components/ui/controls";
+import { Button, Notice, Problem } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
-import {
-  describeJob,
-  fetchJob,
-  isTerminal,
-  jobKeys,
-  startOptimization,
-  type Job,
-} from "@/lib/api/optimizations";
-import { isLocated, patchParticipant, type Participant } from "@/lib/api/participants";
-import {
-  activateSolution,
-  fetchSolution,
-  legOf,
-  stopNumber,
-  solutionKeys,
-  type LegChoice,
-  type Route,
-} from "@/lib/api/solutions";
-import { directionsUrl, legWaypoints, type Waypoint } from "@/lib/results/googleMaps";
 
 import { ResultSummary } from "./ResultSummary";
 import { RouteCard } from "./RouteCard";
-import { RouteMap, type MappedRoute } from "./RouteMap";
 import { UnassignedList } from "./UnassignedList";
-import { useHoverHighlight } from "./useHoverHighlight";
+import type { SolutionState } from "./useSolution";
 
-export type Venue = { address: string; lat: number; lng: number };
-
-/** Poll cadence. Fast enough that an inline solve feels immediate, slow enough to be unremarkable. */
-const POLL_MS = 1000;
+export type { Venue } from "./useSolution";
 
 export function ResultsPanel({
-  publicId,
-  venue,
+  solve,
   timeZone,
-  people,
-  onRosterChanged,
+  rosterSize,
 }: {
-  publicId: string;
-  venue: Venue | null;
+  solve: SolutionState;
   timeZone: string;
-  people: Participant[];
-  onRosterChanged: () => void;
+  rosterSize: number;
 }) {
-  const queryClient = useQueryClient();
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [leg, setLeg] = useState<LegChoice>("outbound");
-  const [highlightedRouteId, setHighlightedRouteId] = useHoverHighlight();
-  const [conflict, setConflict] = useState<string | null>(null);
-
-  const start = useMutation({
-    mutationFn: () => startOptimization(publicId),
-    onSuccess: (result) => {
-      if (result.kind === "job") {
-        setConflict(null);
-        setJobId(result.job.job_id);
-        // The POST body is a full job read; seeding it means the first poll is not a wasted round
-        // trip, and the status line has something to say immediately.
-        queryClient.setQueryData(jobKeys.detail(publicId, result.job.job_id), result.job);
-        return;
-      }
-      // 409: another job is already in flight. Poll that one rather than retrying -- a retry hits
-      // the same partial unique index and fails identically.
-      setConflict(result.detail);
-      if (result.existingJobId) setJobId(result.existingJobId);
-    },
-  });
-
-  const job = useQuery({
-    queryKey: jobKeys.detail(publicId, jobId ?? "none"),
-    queryFn: () => fetchJob(publicId, jobId as string),
-    enabled: jobId !== null,
-    refetchInterval: (query) => {
-      const current = query.state.data as Job | undefined;
-      return current && isTerminal(current.status) ? false : POLL_MS;
-    },
-  });
-
-  const solutionId = job.data?.solution_id ?? null;
-  const solution = useQuery({
-    queryKey: solutionKeys.detail(publicId, solutionId ?? "none"),
-    queryFn: () => fetchSolution(publicId, solutionId as string),
-    enabled: solutionId !== null,
-  });
-
-  const activate = useMutation({
-    mutationFn: () => activateSolution(publicId, solutionId as string),
-    onSuccess: (updated) =>
-      queryClient.setQueryData(solutionKeys.detail(publicId, updated.id), updated),
-  });
-
-  const pin = useMutation({
-    mutationFn: ({ riderId, driverId }: { riderId: string; driverId: string | null }) =>
-      patchParticipant(publicId, riderId, { pinned_driver_id: driverId }),
-    onSuccess: () => {
-      // A pin is part of the problem, so it changes the fingerprint and the roster version: the
-      // solution on screen is now describing a question nobody asked. Refetching is what makes the
-      // "no longer current" banner appear, which is the prompt to re-optimize.
-      onRosterChanged();
-      if (solutionId) {
-        void queryClient.invalidateQueries({
-          queryKey: solutionKeys.detail(publicId, solutionId),
-        });
-      }
-    },
-  });
-
-  const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
-  /** Pin targets: anyone who might drive. A passenger cannot be pinned to, and neither can oneself. */
-  const drivers = useMemo(() => people.filter((p) => p.role !== "passenger"), [people]);
-  const pinnedBy = useMemo(
-    () => new Map(people.map((p) => [p.id, p.pinned_driver_id ?? null])),
-    [people],
-  );
-
-  const locate = useMemo(() => {
-    return (participantId: string): Waypoint | null => {
-      const person = byId.get(participantId);
-      return person && isLocated(person)
-        ? { lat: person.pickup.lat, lng: person.pickup.lng }
-        : null;
-    };
-  }, [byId]);
-
-  const routes = useMemo(() => solution.data?.routes ?? [], [solution.data]);
-
-  const mapped: MappedRoute[] = useMemo(
-    () =>
-      routes.map((route) => ({
-        routeId: route.id,
-        driverName: route.driver_name,
-        home: locate(route.driver_participant_id),
-        stops: legOf(route, leg).stops.flatMap((stop) => {
-          const at = locate(stop.participant_id);
-          return at ? [{ number: stopNumber(stop), label: stop.display_name, ...at }] : [];
-        }),
-      })),
-    [routes, leg, locate],
-  );
-
-  /** People in the answer the roster can no longer place -- cancelled since the solve, usually. */
-  const unplottable = useMemo(() => {
-    const inSolution = routes.reduce((n, route) => n + legOf(route, leg).stops.length, 0);
-    const plotted = mapped.reduce((n, route) => n + route.stops.length, 0);
-    return inSolution - plotted;
-  }, [routes, mapped, leg]);
-
-  /**
-   * A driver's leg as a Google Maps link, or null when it cannot be built honestly. Missing one
-   * stop's coordinates means no link at all: a link silently short of a stop would route a driver
-   * straight past somebody's house.
-   */
-  function directionsFor(route: Route): string | null {
-    const driverHome = locate(route.driver_participant_id);
-    const stops = legOf(route, leg).stops.map((stop) => locate(stop.participant_id));
-    if (!driverHome || !venue || stops.some((s) => s === null)) return null;
-    try {
-      return directionsUrl(legWaypoints({ leg, driverHome, venue, stops: stops as Waypoint[] }));
-    } catch {
-      // A leg longer than the URL format carries. Better no link than a truncated one.
-      return null;
-    }
-  }
-
-  const running = job.data !== undefined && !isTerminal(job.data.status);
-  const busy = start.isPending || running;
-  const failure = [start.error, job.error, solution.error, activate.error, pin.error].find(
-    (e): e is Error => e instanceof Error,
-  );
-
   return (
-    <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3">
-        <Rule />
-        <SectionHeading
-          title="Who drives who"
-          meta={job.data ? describeJob(job.data) : undefined}
-          actions={
-            <Button onClick={() => start.mutate()} disabled={busy || people.length === 0}>
-              {solution.data ? "Re-optimize" : "Work out the carpools"}
-            </Button>
-          }
-        />
-      </div>
-
-      {people.length === 0 && (
+    <div className="flex flex-col gap-4">
+      {rosterSize === 0 && (
         <p className="text-[15px] text-ink-muted">Add people to the roster first.</p>
       )}
 
-      {conflict && <Problem>{conflict}</Problem>}
+      {solve.conflict && <Problem>{solve.conflict}</Problem>}
 
-      {failure && (
+      {solve.failure && (
         <Problem>
-          {failure instanceof ApiError ? failure.message : "Something went wrong working that out."}
+          {solve.failure instanceof ApiError
+            ? solve.failure.message
+            : "Something went wrong working that out."}
         </Problem>
       )}
 
-      {job.data?.status === "failed" && !failure && <Problem>{describeJob(job.data)}</Problem>}
+      {solve.jobFailed && !solve.failure && solve.jobDescription && (
+        <Problem>{solve.jobDescription}</Problem>
+      )}
 
-      {solution.data && (
+      {solve.solution && (
         <>
-          {solution.data.is_stale && (
+          {solve.solution.is_stale && (
             <Notice>
               The roster has changed since this was worked out, so it is a real arrangement but not
               the current one. Re-optimize to bring it up to date — or activate it anyway if you
@@ -239,10 +72,10 @@ export function ResultsPanel({
                 <button
                   key={choice}
                   type="button"
-                  onClick={() => setLeg(choice)}
-                  aria-pressed={leg === choice}
+                  onClick={() => solve.setLeg(choice)}
+                  aria-pressed={solve.leg === choice}
                   className={`px-4 py-1.5 text-sm transition-colors ${
-                    leg === choice
+                    solve.leg === choice
                       ? "bg-accent text-accent-ink"
                       : "text-ink hover:bg-surface-sunken"
                   }`}
@@ -252,80 +85,53 @@ export function ResultsPanel({
               ))}
             </div>
 
-            {solution.data.is_active ? (
+            {solve.solution.is_active ? (
               <span className="text-sm italic text-ink-muted">This is the active plan.</span>
             ) : (
-              <Button
-                variant="quiet"
-                onClick={() => activate.mutate()}
-                disabled={activate.isPending}
-              >
+              <Button variant="quiet" onClick={solve.activate} disabled={solve.activating}>
                 Make this the plan
               </Button>
             )}
           </div>
 
-          {unplottable > 0 && (
+          {solve.unplottable > 0 && (
             <Notice>
-              {unplottable} {unplottable === 1 ? "stop is" : "stops are"} missing from the map:{" "}
-              {unplottable === 1 ? "that person is" : "those people are"} no longer on the roster.
-              They are still listed beside it.
+              {solve.unplottable} {solve.unplottable === 1 ? "stop is" : "stops are"} missing from
+              the map: {solve.unplottable === 1 ? "that person is" : "those people are"} no longer
+              on the roster. They are still listed below.
             </Notice>
           )}
 
-          {/*
-            The map runs the full width of the window, and it is the largest thing on the screen.
-
-            It was a frame the width of a column of text, which made the one element here that
-            rewards size into a thumbnail -- and the map is where "does this ordering make sense"
-            is actually answered. Everything else on this page is read, and reading wants a measure,
-            so the map is the only thing that breaks out of it.
-
-            `65vh` rather than a fixed height: on a laptop it fills most of the fold, and on a
-            phone it stays a picture rather than becoming a page of its own that has to be scrolled
-            past before the list starts.
-          */}
-          <Bleed>
-            <RouteMap
-              routes={mapped}
-              venue={venue}
-              leg={leg}
-              highlightedRouteId={highlightedRouteId}
-              className="h-[65vh] min-h-80"
-              square
-            />
-          </Bleed>
-
-          <ResultSummary routes={routes} unassigned={solution.data.unassigned} />
+          <ResultSummary routes={solve.routes} unassigned={solve.solution.unassigned} />
 
           <div className="flex flex-col">
-            {routes.map((route, index) => (
+            {solve.routes.map((route, index) => (
               <RouteCard
                 key={route.id}
                 route={route}
                 index={index}
-                leg={leg}
+                leg={solve.leg}
                 timeZone={timeZone}
-                drivers={drivers}
-                pinnedBy={pinnedBy}
-                onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
-                pinBusy={pin.isPending}
-                directionsHref={directionsFor(route)}
-                highlighted={highlightedRouteId === route.id}
-                onHighlight={setHighlightedRouteId}
+                drivers={solve.drivers}
+                pinnedBy={solve.pinnedBy}
+                onPin={solve.pin}
+                pinBusy={solve.pinBusy}
+                directionsHref={solve.directionsFor(route)}
+                highlighted={solve.highlightedRouteId === route.id}
+                onHighlight={solve.setHighlightedRouteId}
               />
             ))}
           </div>
 
           <UnassignedList
-            unassigned={solution.data.unassigned}
-            drivers={drivers}
-            pinnedBy={pinnedBy}
-            onPin={(riderId, driverId) => pin.mutate({ riderId, driverId })}
-            pinBusy={pin.isPending}
+            unassigned={solve.solution.unassigned}
+            drivers={solve.drivers}
+            pinnedBy={solve.pinnedBy}
+            onPin={solve.pin}
+            pinBusy={solve.pinBusy}
           />
 
-          {routes.length === 0 && solution.data.unassigned.length > 0 && (
+          {solve.routes.length === 0 && solve.solution.unassigned.length > 0 && (
             <p className="text-[15px] text-ink-muted">
               No cars were formed. Nobody on this roster is marked as driving, or no driver has a
               free seat.
@@ -333,6 +139,6 @@ export function ResultsPanel({
           )}
         </>
       )}
-    </section>
+    </div>
   );
 }

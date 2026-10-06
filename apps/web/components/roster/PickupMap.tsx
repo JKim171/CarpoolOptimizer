@@ -18,9 +18,10 @@
  */
 
 import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
+import { MapFrame } from "@/components/map/MapFrame";
 import { personPin, venuePin } from "@/components/map/markers";
 import type { LocatedParticipant } from "@/lib/api/participants";
 import { useColorScheme, type ColorScheme } from "@/lib/colorScheme";
@@ -49,14 +50,15 @@ export function PickupMap({
   highlightedId,
   onHighlight,
   onMove,
-  className,
+  overlay,
 }: {
   participants: LocatedParticipant[];
   destination: Destination | null;
   highlightedId: string | null;
   onHighlight: (id: string | null) => void;
   onMove: (id: string, point: { lat: number; lng: number }) => void;
-  className?: string;
+  /** Controls drawn over the map -- the canvas's mode switch. */
+  overlay?: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -230,24 +232,22 @@ export function PickupMap({
   }, [participants, destination, ready]);
 
   return (
-    // Taller than it was, but deliberately NOT run to the window's edges the way the results map
-    // is. Hovering a table row highlights its pin and vice versa, and that pairing only works while
-    // both are on screen together -- a full-bleed map here would push the table it is paired with
-    // off the bottom.
-    <div className={className}>
-      <div
-        ref={container}
-        className="h-[28rem] w-full overflow-hidden rounded-[2px] border border-line bg-surface-sunken"
-        role="application"
-        aria-label="Pickup locations. Drag a pin to correct someone's address."
-      />
-      <p className="mt-1.5 text-xs text-ink-muted">
-        {failed
+    // This map used to be deliberately *not* full-bleed: hovering a table row highlights its pin
+    // and vice versa, and that pairing only works while both are on screen, so a map that filled
+    // the window would have pushed the table it is paired with off the bottom. In the shell the
+    // table is in the rail and the map is the canvas, so they are always both on screen and the
+    // reason to keep it small is gone.
+    <MapFrame
+      container={container}
+      label="Pickup locations. Drag a pin to correct someone's address."
+      overlay={overlay}
+      caption={
+        failed
           ? "The map could not load. The roster table is still authoritative — every address is listed there."
           : participants.length === 0
             ? "Pickups appear here as you add people."
-            : "Drag a pin to correct a pickup point. Hover a row to find someone."}
-      </p>
-    </div>
+            : "Drag a pin to correct a pickup point. Hover a row to find someone."
+      }
+    />
   );
 }
