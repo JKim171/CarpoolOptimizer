@@ -31,7 +31,7 @@ function Stat({
     <div className="flex flex-col-reverse">
       <dt className="mt-0.5 text-sm text-ink-muted">{label}</dt>
       <dd
-        className={`font-display text-3xl tabular-nums ${
+        className={`whitespace-nowrap font-display text-2xl tabular-nums ${
           tone === "warn" ? "text-warn-ink" : "text-ink"
         }`}
       >
@@ -53,9 +53,16 @@ export function ResultSummary({
   const driving = routes.reduce((n, route) => n + route.total_duration_s, 0);
 
   return (
-    // Rules above and below rather than a box: the figures are the loudest thing on the page
+    // Rules above and below rather than a box: the figures are the loudest thing in the rail
     // already, and a border around them is one more rectangle for no information.
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-5 sm:grid-cols-4">
+    //
+    // **Two columns, always.** This was `grid-cols-2 sm:grid-cols-4`, which is the right instinct
+    // and the wrong mechanism now that the panel lives in a rail: Tailwind's breakpoints measure
+    // the *viewport*, and the viewport being wide is exactly when the rail is at its narrowest
+    // relative to it. Four columns in a 23rem rail is about 98px each, which wrapped "1 h 46 min"
+    // onto three lines. The rail's width is set by the shell rather than by the window, so the
+    // count is too.
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-4 border-y border-line py-4">
       <Stat value={String(routes.length)} label={routes.length === 1 ? "car" : "cars"} />
       <Stat value={String(riders)} label={riders === 1 ? "rider" : "riders"} />
       <Stat
