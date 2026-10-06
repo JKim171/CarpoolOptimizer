@@ -1,14 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
 import { CreateEventForm } from "@/components/CreateEventForm";
+import { EventList } from "@/components/EventList";
 import { DestinationMap, type Point } from "@/components/DestinationMap";
 import { AppShell, RailSection } from "@/components/shell/AppShell";
-import { Button } from "@/components/ui/controls";
 import {
-  forgetToken,
   knownEventsServerSnapshot,
   knownEventsSnapshot,
   subscribeToKnownEvents,
@@ -48,27 +46,7 @@ export default function Home() {
        */}
       {known.length > 0 && (
         <RailSection title="Your events">
-          <ul className="-mx-2 divide-y divide-line border-y border-line">
-            {known.map((publicId) => (
-              <li key={publicId} className="group flex items-center gap-2 px-2">
-                <Link
-                  href={`/events/${publicId}`}
-                  className="flex-1 truncate py-2.5 font-mono text-sm text-accent transition-colors"
-                >
-                  {publicId}
-                </Link>
-                <Button
-                  variant="ghost"
-                  type="button"
-                  onClick={() => forgetToken(publicId)}
-                  aria-label={`Remove ${publicId} from this device`}
-                  title="Remove from this device"
-                >
-                  Remove
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <EventList publicIds={known} />
           <p className="text-xs text-ink-muted">
             Organizer tokens are kept in this browser only. On another device you will need the link
             and its token. Removing forgets the token here — it does not delete the event.
