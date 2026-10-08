@@ -6,6 +6,7 @@ import { CreateEventForm } from "@/components/CreateEventForm";
 import { EventList } from "@/components/EventList";
 import { DestinationMap, type Point } from "@/components/DestinationMap";
 import { AppShell, RailSection } from "@/components/shell/AppShell";
+import { ThemeToggle } from "@/components/shell/ThemeToggle";
 import {
   knownEventsServerSnapshot,
   knownEventsSnapshot,
@@ -30,7 +31,13 @@ export default function Home() {
   const rail = (
     <>
       <div className="flex flex-col gap-2 px-5 pb-5 pt-6">
-        <h1 className="font-display text-2xl text-ink">whodriveswho</h1>
+        {/* The theme control sits with the wordmark rather than in a settings screen, because this
+            app has no settings screen and one preference does not earn one. `items-start` so the
+            control aligns to the cap height of the title rather than floating in the middle. */}
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="font-display text-2xl text-ink">whodriveswho</h1>
+          <ThemeToggle />
+        </div>
         <p className="text-[15px] leading-relaxed text-ink-muted">
           Enter a roster, get an assignment: who drives who, in what pickup order, out and back.
         </p>

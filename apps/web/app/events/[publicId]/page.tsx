@@ -25,6 +25,7 @@ import { AddParticipantForm } from "@/components/roster/AddParticipantForm";
 import { PasteRoster } from "@/components/roster/PasteRoster";
 import { RosterList } from "@/components/roster/RosterList";
 import { AppShell, RailSection } from "@/components/shell/AppShell";
+import { ThemeToggle } from "@/components/shell/ThemeToggle";
 import { Badge, Button, Detail, Notice, Problem } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 import { eventKeys, fetchEvent } from "@/lib/api/events";
@@ -182,9 +183,14 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
   const rail = (
     <>
       <div className="flex flex-col gap-3 px-5 pb-5 pt-6">
-        <Link href="/" className="text-sm text-accent underline underline-offset-2">
-          ← All events
-        </Link>
+        {/* The back link and the theme control share the top row: both are chrome rather than
+            part of this event, and the event's own title comes below them. */}
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/" className="text-sm text-accent underline underline-offset-2">
+            ← All events
+          </Link>
+          <ThemeToggle />
+        </div>
 
         {event.isPending && <p className="text-sm text-ink-muted">Loading…</p>}
 

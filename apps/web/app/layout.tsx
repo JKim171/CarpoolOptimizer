@@ -32,9 +32,40 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Write the chosen theme onto `<html>` before anything paints.
+ *
+ * The OS preference needs no script -- `globals.css` answers it with a media query. A *chosen*
+ * theme does, because it lives in localStorage, and it has to be read in a blocking script in the
+ * document rather than in React: by the time an effect or even a hydration render could set the
+ * attribute, the browser has already painted a screen using the other palette. That flash is the
+ * whole reason this is here, and it is worst in the case people notice most -- someone who chose
+ * light on a dark machine gets a dark flash on every single navigation.
+ *
+ * `system` deliberately writes nothing: no attribute is what lets the media query apply. Same rule
+ * as `applyPreference` in `lib/colorScheme.ts`, which takes over once React is running; the two
+ * have to agree, so each one's comment points at the other.
+ *
+ * `JSON.stringify` on the key is not decoration -- it is what keeps this a string literal rather
+ * than something a future edit could turn into an injection point. Note that this inline script
+ * means a Content-Security-Policy for this app cannot be `script-src 'self'` alone; it needs a
+ * nonce or a hash for this one tag. There is no CSP on the web app today (the one `tokens.ts`
+ * describes is not deployed), so this costs nothing now and is written down for whoever adds one.
+ */
+const THEME_SCRIPT = `try{var p=localStorage.getItem(${JSON.stringify(
+  "carpool.theme",
+)});if(p==="light"||p==="dark")document.documentElement.setAttribute("data-theme",p)}catch(e){}`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
+    // `suppressHydrationWarning` because the script above changes an attribute on this element
+    // before React hydrates, which is exactly the mismatch the warning is for and exactly the
+    // mismatch that is intended here. It suppresses one level deep -- this element only.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+    >
       {/*
         The shell owns the viewport and scrolls its rail internally, so the document itself never
         scrolls. This used to be `flex min-h-full flex-col overflow-x-clip`, where the `clip` was
@@ -43,6 +74,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         pixels of horizontal scroll. There is no text column to escape any more.
       */}
       <body className="h-full overflow-hidden">
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <Providers>{children}</Providers>
       </body>
     </html>

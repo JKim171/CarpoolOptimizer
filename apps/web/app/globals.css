@@ -18,7 +18,36 @@
  * running text, so a link never reads as a car.
  */
 
+/**
+ * **Dark mode resolves in two places, and the order matters.**
+ *
+ * The OS preference is answered in CSS, with no JavaScript -- that is the right tool and it is what
+ * a first paint can rely on. A *chosen* theme cannot work that way: it lives in localStorage, so
+ * something has to read it. `data-theme` on `<html>` is that something, written before first paint
+ * by the script in `app/layout.tsx` and thereafter by `lib/colorScheme.ts`.
+ *
+ * So the dark palette is reachable two ways, and the rules below are ordered so that an explicit
+ * choice always wins:
+ *
+ *  - no attribute      -- follow `prefers-color-scheme`, exactly as before this was switchable
+ *  - `data-theme=dark` -- dark, whatever the OS says
+ *  - `data-theme=light`-- light, whatever the OS says, via the `:not()` on the media block
+ *
+ * Which means the dark values appear **twice**, and two copies of a palette is precisely the drift
+ * this file's header warns about. `drift.test.ts` compares the two blocks declaration by
+ * declaration and fails the build if they disagree, the same guard the DB models and the OpenAPI
+ * contract get. Considered and rejected: `light-dark()`, which would state each token once and
+ * needs no duplication at all, but which breaks the whole palette rather than degrading on
+ * anything older than Safari 17.5 / iOS 17.5 -- and the people this app is for are parents on
+ * whatever phone they already own.
+ *
+ * `color-scheme` is set alongside the tokens so the native widgets follow too: the date input in
+ * the create-event form, the `<select>` popups in the roster, and the rail's own scrollbar are
+ * painted by the browser, not by these variables, and they stayed light in dark mode before this.
+ */
+
 :root {
+  color-scheme: light;
   --surface: #faf8f3;
   /* Inputs and the few things that still need a plane of their own. Lighter than the page, not
      darker: ink sits on paper, and a sunken field reads as a hole in it. */
@@ -45,8 +74,10 @@
   --warn-ink: #7c5410;
 }
 
+/* dark palette: following the OS -- keep in step with the chosen-dark block below */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --surface: #15130f;
     --surface-raised: #1e1b16;
     --surface-sunken: #272319;
@@ -65,6 +96,28 @@
     --warn-line: #4b3c13;
     --warn-ink: #e3b863;
   }
+}
+
+/* dark palette: chosen explicitly -- keep in step with the follows-the-OS block above */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #15130f;
+  --surface-raised: #1e1b16;
+  --surface-sunken: #272319;
+  --line: #342f25;
+  --line-strong: #534b3a;
+  --ink: #ece6da;
+  --ink-muted: #9d9281;
+  --accent: #9cb8e6;
+  --accent-hover: #c0d2f0;
+  --accent-ink: #15130f;
+  --accent-soft: #1d2740;
+  --accent-soft-ink: #a8c2ec;
+  --danger-surface: #2d1511;
+  --danger-ink: #f0a894;
+  --warn-surface: #241c08;
+  --warn-line: #4b3c13;
+  --warn-ink: #e3b863;
 }
 
 @theme inline {
