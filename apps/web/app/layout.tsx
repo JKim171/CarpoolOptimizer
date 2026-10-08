@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Karla } from "next/font/google";
 
+import { WebAnalytics } from "@/components/analytics/WebAnalytics";
 import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import { Providers } from "./providers";
@@ -109,6 +110,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="h-full overflow-hidden">
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <Providers>{children}</Providers>
+        {/* Last, and outside Providers: it renders no UI and needs nothing from them. */}
+        <WebAnalytics />
       </body>
     </html>
   );
