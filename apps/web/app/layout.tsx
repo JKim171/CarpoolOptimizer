@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Karla } from "next/font/google";
 
+import { SITE_NAME, SITE_URL } from "@/lib/seo";
+
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -24,12 +26,43 @@ import "./globals.css";
 const sans = Karla({ variable: "--font-text", subsets: ["latin"] });
 const mono = IBM_Plex_Mono({ variable: "--font-mono", subsets: ["latin"], weight: ["400", "500"] });
 
+/**
+ * Site-wide metadata. Public by default; private where it has to be.
+ *
+ * This used to carry `robots: { index: false, follow: false }`, reasoning about event pages -- which
+ * was correct about event pages and wrong about where to say it. In the root layout it is inherited
+ * by every route, so the landing page told Google to ignore it too, and the whole domain was
+ * unindexable. The rule now lives in `app/events/[publicId]/layout.tsx`, next to the only pages it
+ * is about, and is backed by an `X-Robots-Tag` header in `next.config.ts` so that losing one does
+ * not expose an event URL.
+ *
+ * `metadataBase` is what makes the relative `canonical` on each page and the Open Graph URLs below
+ * resolve to absolute ones.
+ */
 export const metadata: Metadata = {
-  title: "CarpoolOptimizer",
-  description: "Decide who drives who, in what order, out and back.",
-  // Event pages are reachable only with an organizer token, and their URLs carry a public id that
-  // should not end up in a search index.
-  robots: { index: false, follow: false },
+  metadataBase: new URL(SITE_URL),
+  // The brand reads as one word, lowercase, the way the domain does. The default title also says
+  // what the thing is, because a search result showing only a coined word tells a reader nothing.
+  title: {
+    default: `${SITE_NAME} — work out who drives who`,
+    template: `%s · ${SITE_NAME}`,
+  },
+  description:
+    "A free tool for carpool coordinators. Enter a roster and get an assignment: who drives who, " +
+    "in what pickup order, out and back. Built for teams, clubs and troops heading to one place " +
+    "at one time.",
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    url: "/",
+    title: `${SITE_NAME} — work out who drives who`,
+    description:
+      "Enter a roster, get an assignment: who drives who, in what pickup order, out and back.",
+    locale: "en_US",
+  },
+  // No Open Graph image yet, so a shared link renders as a title-and-description card rather than a
+  // broken one. Worth adding before any public post -- see docs/handoff.md.
 };
 
 /**
