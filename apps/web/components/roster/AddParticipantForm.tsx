@@ -97,7 +97,17 @@ export function AddParticipantForm({
         }}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      {/*
+        **Stacked, always.** This was `sm:grid-cols-2`, which is the right instinct and the wrong
+        mechanism now that the form lives in a rail: Tailwind's breakpoints measure the *viewport*,
+        and the viewport being wide is exactly when the rail is at its narrowest relative to it. So
+        the pair went to two columns on a desktop -- about 160px each in a 23rem rail, where "Seats
+        for passengers" wraps to three lines over a field two digits wide -- and stayed stacked on
+        the phone, which is the one width where side-by-side would have been fine. Same correction
+        as `ResultSummary` (`48b0a81`): the rail's width is set by the shell, not by the window, so
+        the column count is too.
+      */}
+      <div className="grid gap-3">
         <Field label="Role">
           <Select value={role} onChange={(e) => setRole(e.target.value as "passenger" | "driver")}>
             <option value="passenger">Passenger</option>
