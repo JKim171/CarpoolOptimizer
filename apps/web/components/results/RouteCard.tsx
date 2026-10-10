@@ -28,10 +28,10 @@ export function RouteCard({
   index,
   leg,
   timeZone,
-  drivers,
-  pinnedBy,
+  drivers = [],
+  pinnedBy = new Map(),
   onPin,
-  pinBusy,
+  pinBusy = false,
   directionsHref,
   highlighted,
   onHighlight,
@@ -40,11 +40,12 @@ export function RouteCard({
   index: number;
   leg: LegChoice;
   timeZone: string;
-  drivers: Participant[];
+  drivers?: Participant[];
   /** Current `pinned_driver_id` per participant, read from the live roster rather than the solution. */
-  pinnedBy: Map<string, string | null>;
-  onPin: (riderId: string, driverId: string | null) => void;
-  pinBusy: boolean;
+  pinnedBy?: Map<string, string | null>;
+  /** Omitted on the read-only example at `/demo`, which drops the pin control from every stop. */
+  onPin?: (riderId: string, driverId: string | null) => void;
+  pinBusy?: boolean;
   /** Null when the driver's home could not be located, so no honest link can be built. */
   directionsHref: string | null;
   highlighted: boolean;
@@ -132,13 +133,15 @@ export function RouteCard({
                 <span className="shrink-0 text-[15px] tabular-nums text-ink">
                   {formatTimeInZone(new Date(stop.eta), timeZone)}
                 </span>
-                <PinSelect
-                  value={pinnedBy.get(stop.participant_id) ?? null}
-                  riderId={stop.participant_id}
-                  drivers={drivers}
-                  onChange={(driverId) => onPin(stop.participant_id, driverId)}
-                  disabled={pinBusy}
-                />
+                {onPin && (
+                  <PinSelect
+                    value={pinnedBy.get(stop.participant_id) ?? null}
+                    riderId={stop.participant_id}
+                    drivers={drivers}
+                    onChange={(driverId) => onPin(stop.participant_id, driverId)}
+                    disabled={pinBusy}
+                  />
+                )}
               </li>
             ))}
           </ol>

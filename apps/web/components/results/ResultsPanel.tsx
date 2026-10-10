@@ -16,6 +16,7 @@
 import { Button, Notice, Problem } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
 
+import { LegSwitch } from "./LegSwitch";
 import { ResultSummary } from "./ResultSummary";
 import { RouteCard } from "./RouteCard";
 import { UnassignedList } from "./UnassignedList";
@@ -63,27 +64,7 @@ export function ResultsPanel({
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div
-              role="group"
-              aria-label="Which leg to show"
-              className="inline-flex overflow-hidden rounded-[2px] border border-line-strong"
-            >
-              {(["outbound", "inbound"] as const).map((choice) => (
-                <button
-                  key={choice}
-                  type="button"
-                  onClick={() => solve.setLeg(choice)}
-                  aria-pressed={solve.leg === choice}
-                  className={`px-4 py-1.5 text-sm transition-colors ${
-                    solve.leg === choice
-                      ? "bg-accent text-accent-ink"
-                      : "text-ink hover:bg-surface-sunken"
-                  }`}
-                >
-                  {choice === "outbound" ? "There" : "Back"}
-                </button>
-              ))}
-            </div>
+            <LegSwitch leg={solve.leg} onLeg={solve.setLeg} />
 
             {solve.solution.is_active ? (
               <span className="text-sm italic text-ink-muted">This is the active plan.</span>

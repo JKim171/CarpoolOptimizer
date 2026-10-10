@@ -1,10 +1,8 @@
 /**
- * The sitemap, which currently lists one URL.
+ * The sitemap: the landing page and the example at `/demo`.
  *
- * That is not an oversight -- it is the honest size of this site's public surface. Everything else
- * is an event page, and those are private by requirement (`lib/seo.ts`). Listing one page is still
- * worth doing: it is what `robots.txt` points at, and it gives the landing page a stated
- * `lastModified` instead of leaving a crawler to guess from headers.
+ * That is the honest size of this site's public surface. Everything else is an event page, and
+ * those are private by requirement (`lib/seo.ts`).
  *
  * Content pages aimed at what coordinators actually search for are the next piece of work, and each
  * one gets a line here.
@@ -23,6 +21,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 1,
+    },
+    {
+      url: `${SITE_URL}/demo`,
+      // No `lastModified`: the page changes only when `make demo` regenerates it, and a build-time
+      // date would claim a change on every deploy.
+      changeFrequency: "monthly",
+      priority: 0.8,
     },
   ];
 }

@@ -23,6 +23,7 @@ describe("isPrivatePath", () => {
   it("leaves the public pages alone", () => {
     expect(isPrivatePath("/")).toBe(false);
     expect(isPrivatePath("/privacy")).toBe(false);
+    expect(isPrivatePath("/demo")).toBe(false);
   });
 
   it("does not sweep up a sibling path that shares the prefix", () => {

@@ -8,6 +8,7 @@
  * lets `/` state a canonical URL. See `app/page.tsx`.
  */
 
+import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
 import { CreateEventForm } from "@/components/CreateEventForm";
@@ -49,6 +50,11 @@ export function HomeDashboard() {
         <p className="text-[15px] leading-relaxed text-ink-muted">
           Enter a roster, get an assignment: who drives who, in what pickup order, out and back.
         </p>
+        {/* Before the form on purpose: a first visit should see an answer before being asked for
+            anyone's address. */}
+        <Link href="/demo" className="self-start text-sm text-accent underline underline-offset-2">
+          See an example →
+        </Link>
       </div>
 
       {/*
