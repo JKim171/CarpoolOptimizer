@@ -56,7 +56,14 @@ export function CreateEventForm({
     // Validated here as well as server-side so the coordinator gets the message next to the field
     // rather than as a 422 after a round trip.
     if (!point) {
-      setProblem("Choose a destination, or place the pin on the map.");
+      setProblem("Choose a destination from the suggestions, or click the map to place the pin.");
+      return;
+    }
+    if (!address.trim()) {
+      // Reachable only since a click can place the pin without the field being touched. The
+      // coordinate tells the solver where to go; the text is what the event page shows an
+      // organizer, and the API requires it.
+      setProblem("Add an address or a name for the destination, so the event says where it is.");
       return;
     }
     const arrivalAt = wallClockToInstant(arrival, timeZone);
@@ -97,9 +104,17 @@ export function CreateEventForm({
         />
       </Field>
 
+      {/*
+        **The example is one the geocoder can actually find.** This read `500 E Liberty St, Ann
+        Arbor, MI`, which the provider's autocomplete returns nothing for -- so the first thing a
+        new organizer typed, copied from the app's own prompt, answered "No matches". A named venue
+        is the better prompt anyway: it is what a destination usually is, and it is the case the
+        drag-to-adjust below exists for (a school geocodes to its building, not to its car park).
+      */}
       <AddressField
         label="Destination"
-        placeholder="500 E Liberty St, Ann Arbor, MI"
+        placeholder="Pioneer High School, Ann Arbor"
+        resolved={point !== null}
         value={address}
         onChange={onAddress}
         onPick={pick}

@@ -13,6 +13,13 @@
  *
  * The server validates the same rules (an active driver of this event, not the rider themselves);
  * this narrows the options so the common mistakes cannot be made rather than being rejected.
+ *
+ * **The control never says "pin" to the reader.** `pinned_driver_id` is the field's name and the
+ * name this file uses for the concept, but one of these sits on every rider row of a screen whose
+ * canvas is a map covered in pins and whose caption reads "drag a pin to correct a pickup point".
+ * The same word for a map marker and for a constraint on the solver, eight inches apart, is one
+ * word too many. The reader is asked the question instead -- who must this rider travel with --
+ * and the unset state answers it: any driver.
  */
 
 import type { Participant } from "@/lib/api/participants";
@@ -42,7 +49,7 @@ export function PinSelect({
 
   return (
     <label className="flex shrink-0 items-center text-xs">
-      <span className="sr-only">Pin to a driver</span>
+      <span className="sr-only">Must ride with</span>
       <select
         value={value ?? ""}
         disabled={disabled}
@@ -53,7 +60,7 @@ export function PinSelect({
             : "border-transparent bg-transparent text-ink-muted hover:border-line hover:bg-surface-raised"
         }`}
       >
-        <option value="">no pin</option>
+        <option value="">any driver</option>
         {options.map((driver) => (
           <option key={driver.id} value={driver.id}>
             {driver.display_name}

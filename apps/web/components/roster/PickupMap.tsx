@@ -15,6 +15,14 @@
  * Dragging a pin writes the correction back. That coordinate is then stored with
  * `geocode_source = 'user'`, the one provenance the design keeps permanently, because it came from
  * a human rather than the provider (docs/design.md 5.2).
+ *
+ * **The map also takes a pickup that the geocoder could not produce.** While the add-person form
+ * is open and still has no coordinates, a click on the map places its pin -- the `draft`, drawn
+ * with a dashed halo because it is not on the roster yet. That path is not a nicety: autocomplete
+ * returns nothing for plenty of ordinary addresses, and `AddParticipantForm` has no other way to
+ * obtain a coordinate, so without it a coordinator whose street the provider has never heard of
+ * simply cannot add that person. As on the destination map, a click only ever *creates* the pin;
+ * once it exists it is moved by dragging, so reading the map cannot relocate someone's house.
  */
 
 import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
@@ -22,13 +30,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
 import { MapFrame } from "@/components/map/MapFrame";
-import { personPin, venuePin } from "@/components/map/markers";
+import { draftPin, personPin, venuePin } from "@/components/map/markers";
 import type { LocatedParticipant } from "@/lib/api/participants";
 import { useLiveColorScheme, type ColorScheme } from "@/lib/colorScheme";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
 export type Destination = { address: string; lat: number; lng: number };
+export type Point = { lat: number; lng: number };
 
 /**
  * Marker colours carry meaning: drivers are the scarce resource a coordinator is counting, and the
@@ -51,6 +60,9 @@ export function PickupMap({
   onHighlight,
   onMove,
   overlay,
+  draft,
+  onDraft,
+  placing,
 }: {
   participants: LocatedParticipant[];
   destination: Destination | null;
@@ -59,11 +71,17 @@ export function PickupMap({
   onMove: (id: string, point: { lat: number; lng: number }) => void;
   /** Controls drawn over the map -- the canvas's mode switch. */
   overlay?: ReactNode;
+  /** The pickup the add-person form is holding, placed here rather than by the geocoder. */
+  draft: Point | null;
+  onDraft: (point: Point) => void;
+  /** True while that form is the open tab, which is the only time a click may place a pin. */
+  placing: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const markers = useRef(new Map<string, Marker>());
   const destinationMarker = useRef<Marker | null>(null);
+  const draftMarker = useRef<Marker | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const scheme = useLiveColorScheme();
@@ -75,10 +93,17 @@ export function PickupMap({
   // a render React discards.
   const highlightHandler = useRef(onHighlight);
   const moveHandler = useRef(onMove);
+  const draftHandler = useRef(onDraft);
+  // `placing` is read by the click handler, which is bound once with the map, so it has to be a
+  // ref rather than a closed-over prop -- otherwise the map keeps forever whichever tab was open
+  // when it mounted.
+  const placingNow = useRef(placing);
   useEffect(() => {
     highlightHandler.current = onHighlight;
     moveHandler.current = onMove;
-  }, [onHighlight, onMove]);
+    draftHandler.current = onDraft;
+    placingNow.current = placing;
+  }, [onHighlight, onMove, onDraft, placing]);
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -101,12 +126,18 @@ export function PickupMap({
       if (event.error?.message?.includes("style")) setFailed(true);
     });
 
+    instance.on("click", (event) => {
+      if (!placingNow.current || draftMarker.current) return;
+      draftHandler.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+    });
+
     map.current = instance;
     return () => {
       instance.remove();
       map.current = null;
       registry.clear();
       destinationMarker.current = null;
+      draftMarker.current = null;
       setReady(false);
     };
     // Built once; later prop changes move markers rather than rebuilding the map, which would fight
@@ -131,6 +162,8 @@ export function PickupMap({
     markers.current.clear();
     destinationMarker.current?.remove();
     destinationMarker.current = null;
+    draftMarker.current?.remove();
+    draftMarker.current = null;
     setReady(false);
     instance.setStyle(styleFor(scheme));
   }, [scheme]);
@@ -149,6 +182,43 @@ export function PickupMap({
       destinationMarker.current.setLngLat([destination.lng, destination.lat]);
     }
   }, [destination, ready, scheme]);
+
+  /**
+   * The pin being placed by hand, which belongs to no one yet.
+   *
+   * Kept out of the roster reconcile above because it is keyed by nothing -- there is at most one,
+   * it has no participant id, and it must not be swept by the "remove the gone" pass. It is also
+   * deliberately left out of the fit below: the organizer placed it by clicking a spot they were
+   * already looking at, and refitting the view out from under that click is the one thing that
+   * would make placing a second pin harder than the first.
+   */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !ready) return;
+
+    if (!draft) {
+      draftMarker.current?.remove();
+      draftMarker.current = null;
+      return;
+    }
+
+    if (draftMarker.current) {
+      draftMarker.current.setLngLat([draft.lng, draft.lat]);
+      return;
+    }
+
+    const marker = new Marker({
+      element: draftPin(scheme, COLOR[scheme].passenger, "New pickup — drag to adjust"),
+      draggable: true,
+    })
+      .setLngLat([draft.lng, draft.lat])
+      .addTo(instance);
+    marker.on("dragend", () => {
+      const moved = marker.getLngLat();
+      draftHandler.current({ lat: moved.lat, lng: moved.lng });
+    });
+    draftMarker.current = marker;
+  }, [draft, ready, scheme]);
 
   // Reconcile markers against the roster: add new people, move changed ones, remove the gone.
   useEffect(() => {
@@ -244,9 +314,16 @@ export function PickupMap({
       caption={
         failed
           ? "The map could not load. The roster table is still authoritative — every address is listed there."
-          : participants.length === 0
-            ? "Pickups appear here as you add people."
-            : "Drag a pin to correct a pickup point. Hover a row to find someone."
+          : // While a pickup is being placed the caption says so and says nothing else: it is the
+            // one moment the map is an input rather than a check, and the instruction for that is
+            // worth more than the standing advice about hovering rows.
+            draft
+            ? "Drag the new pin to the exact pickup point, then add the person."
+            : placing
+              ? "Click the map to place this person's pickup, or pick an address in the panel."
+              : participants.length === 0
+                ? "Pickups appear here as you add people."
+                : "Drag a pin to correct a pickup point. Hover a row to find someone."
       }
     />
   );

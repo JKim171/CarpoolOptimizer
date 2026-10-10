@@ -11,6 +11,13 @@
  * unit -- an address paired with someone else's coordinates is the silent failure that distorts a
  * whole solve, and it is why the API takes `destination` as a nested object rather than three
  * sibling fields (docs/design.md 5.2).
+ *
+ * **The fallback messages name a real escape hatch, and that is a constraint on the screens that
+ * use this.** Autocomplete misses ordinary addresses -- `500 E Liberty St, Ann Arbor` and
+ * `1100 Packard St, Ann Arbor` both return nothing from the provider -- so "no matches" is a state
+ * a coordinator reaches by typing their own street correctly, not by making a mistake. Every map
+ * this field sits beside therefore accepts a click to place the pin, and these messages say so.
+ * Do not mount it next to a map that does not.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -27,12 +34,22 @@ export function AddressField({
   onPick,
   label,
   placeholder,
+  resolved = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   onPick: (place: Place) => void;
   label: string;
   placeholder?: string;
+  /**
+   * The caller already holds a coordinate for this address, placed on the map.
+   *
+   * Every note this field writes tells the reader to go and do that, so once they have, the notes
+   * are advice for a problem that no longer exists -- and "No matches. Click the map to place the
+   * pin instead." directly under "Pickup pinned on the map" reads as a rejection of the pin. The
+   * suggestions still appear and picking one still replaces the coordinate; only the nagging goes.
+   */
+  resolved?: boolean;
 }) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [open, setOpen] = useState(false);
@@ -58,7 +75,7 @@ export function AddressField({
         const found = await suggest(query);
         if (mine !== generation.current) return;
         setPlaces(found);
-        setNote(found.length === 0 ? "No matches. You can still place the pin by hand." : null);
+        setNote(found.length === 0 ? "No matches. Click the map to place the pin instead." : null);
       } catch (error) {
         if (mine !== generation.current) return;
         setPlaces([]);
@@ -66,8 +83,8 @@ export function AddressField({
         // dragging the pin (docs/design.md 5.2).
         setNote(
           error instanceof ApiError && error.status === 503
-            ? "Address lookup is unavailable. Place the pin on the map instead."
-            : "Address lookup failed. Place the pin on the map instead.",
+            ? "Address lookup is unavailable. Click the map to place the pin."
+            : "Address lookup failed. Click the map to place the pin.",
         );
       }
     }, DEBOUNCE_MS);
@@ -75,9 +92,15 @@ export function AddressField({
     return () => clearTimeout(timer);
   }, [value]);
 
+  // Derived rather than stored: the note is what the *lookup* found, and `resolved` is whether the
+  // caller still needs to hear it. Keeping them separate means the pin can be placed before or
+  // after the lookup and the result is the same, with no second effect to reconcile them -- and
+  // removing the pin brings the note back, which is right, because the advice applies again.
+  const shown = resolved ? null : note;
+
   return (
     <div className="relative">
-      <Field label={label} hint={note}>
+      <Field label={label} hint={shown}>
         <TextInput
           value={value}
           placeholder={placeholder}

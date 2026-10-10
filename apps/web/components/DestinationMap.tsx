@@ -12,6 +12,12 @@
  * action rather than the provider, so it is not subject to a geocoder's storage terms and is stored
  * with `geocode_source = 'user'` (docs/design.md 5.2).
  *
+ * **A click places the first pin**, which is what makes the form's "or place the pin on the map"
+ * true -- before this there was no way to produce a pin except by picking a suggestion, and
+ * autocomplete misses plenty of real addresses (see `AddressField`). The click only ever *creates*
+ * a pin: once one exists it is moved by dragging it, because a stray click on a map you are
+ * reading must not silently relocate the meeting point.
+ *
  * Tile source and worker setup are shared -- see `components/map/basemap.ts`.
  */
 
@@ -67,6 +73,12 @@ export function DestinationMap({
     // (docs/design.md 7.5). The form below still takes a typed address and coordinates.
     instance.on("error", (event) => {
       if (event.error?.message?.includes("style")) setFailed(true);
+    });
+
+    // Bound once with the map, so the guard reads the live ref rather than a captured `point`.
+    instance.on("click", (event) => {
+      if (marker.current) return;
+      handler.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
     });
 
     map.current = instance;
@@ -125,13 +137,13 @@ export function DestinationMap({
   return (
     <MapFrame
       container={container}
-      label="Destination location. Drag the marker to correct it."
+      label="Destination location. Click the map to place the marker, or drag it to correct it."
       caption={
         failed
           ? "The map could not load. You can still enter an address and coordinates in the panel."
           : point
             ? "Drag the pin to the exact meeting point — a parking entrance, not the building centre."
-            : "Choose an address to place the pin."
+            : "Choose an address, or click the map to place the pin."
       }
     />
   );

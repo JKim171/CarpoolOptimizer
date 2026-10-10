@@ -15,6 +15,7 @@
  *  - **Square** is the destination. One per map, never a person.
  *  - **Filled circle** is a person at a place -- a pickup on the roster, a numbered stop on a route.
  *  - **Hollow circle** is a driver's own home, so it is not counted as a pickup.
+ *  - **A dashed halo** means provisional: the mark is on the map but not yet in the data.
  *
  * Shape carries the distinction and colour reinforces it, rather than colour carrying it alone.
  * That is what lets the same vocabulary serve two basemaps: the shapes are identical in both
@@ -86,6 +87,23 @@ export function personPin(
   );
   if (className) el.className = className;
   return el;
+}
+
+/**
+ * A pickup being placed by hand, before the person it belongs to exists.
+ *
+ * Still a filled circle, because it is still a person at a place, and still the passenger colour,
+ * because inventing a ninth hue for a transient state would cost more than it says. What marks it
+ * is the dashed halo: this pin is on the map but not on the roster, so it must not be counted when
+ * reading the map and it will be gone a moment later -- either replaced by a real pickup pin in
+ * the person's role colour, or dropped when the form is cleared.
+ */
+export function draftPin(scheme: ColorScheme, color: string, label: string): HTMLDivElement {
+  return element(
+    `width:18px;height:18px;border-radius:9999px;background:${color};${ringOf(scheme)};` +
+      `outline:2px dashed ${color};outline-offset:3px;cursor:grab`,
+    label,
+  );
 }
 
 /** A numbered stop on a route. Larger than a plain pickup, because it carries a digit. */

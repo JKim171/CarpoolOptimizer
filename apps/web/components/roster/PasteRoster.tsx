@@ -21,7 +21,14 @@ import { resolve, type Resolution } from "@/lib/api/geocode";
 import { addParticipant, type ParticipantCreate } from "@/lib/api/participants";
 import { describeMapping, parseRoster, type ParsedParticipant } from "@/lib/roster/parse";
 
-const EXAMPLE = "Ana Ruiz\t12 Oak St, Ann Arbor\t3\nBo Chen\t44 Elm Ave, Ann Arbor\t0";
+/**
+ * Shown as the textarea's placeholder, so both addresses are ones the geocoder actually finds.
+ *
+ * This read `12 Oak St` and `44 Elm Ave`, neither of which exists in Ann Arbor: pasting the
+ * example verbatim resolved both to the city centroid and flagged them approximate, which is a
+ * poor first demonstration of a preview whose job is to tell good rows from doubtful ones.
+ */
+const EXAMPLE = "Ana Ruiz\t200 N Main St, Ann Arbor\t3\nBo Chen\t500 Miller Ave, Ann Arbor\t0";
 
 type Candidate = {
   parsed: ParsedParticipant;

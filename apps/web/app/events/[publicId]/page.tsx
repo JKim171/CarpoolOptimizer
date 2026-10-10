@@ -21,8 +21,8 @@ import { ResultsPanel } from "@/components/results/ResultsPanel";
 import { RouteMap } from "@/components/results/RouteMap";
 import { useSolution } from "@/components/results/useSolution";
 import { PickupMap } from "@/components/roster/PickupMap";
-import { AddParticipantForm } from "@/components/roster/AddParticipantForm";
-import { PasteRoster } from "@/components/roster/PasteRoster";
+import { AddPeople, type AddMode } from "@/components/roster/AddPeople";
+import type { DraftPickup } from "@/components/roster/AddParticipantForm";
 import { RosterList } from "@/components/roster/RosterList";
 import { AppShell, RailSection } from "@/components/shell/AppShell";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
@@ -56,6 +56,15 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
   /** What the organizer last asked the canvas to show; null means "whatever fits". */
   const [chosenMode, setChosenMode] = useState<MapMode | null>(null);
   const [seenSolutionId, setSeenSolutionId] = useState<string | null>(null);
+  /**
+   * Which way of adding people is open, and the pickup the single-person form is holding.
+   *
+   * Both halves of the screen read the pickup -- the form submits it, the canvas draws it and is
+   * where it gets placed -- so it belongs to the screen rather than to either one. Same split as
+   * the destination on the home screen.
+   */
+  const [addMode, setAddMode] = useState<AddMode>("paste");
+  const [draftPickup, setDraftPickup] = useState<DraftPickup | null>(null);
 
   const event = useQuery({
     queryKey: eventKeys.detail(publicId),
@@ -87,6 +96,23 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
   });
 
   const people = rosterPeople(roster.data);
+  /**
+   * Forget a highlight whose row has gone.
+   *
+   * Removing someone while hovering their row is the ordinary way to delete them -- the Remove
+   * button only appears on hover -- and no `mouseleave` ever fires for a row that stopped
+   * existing under the cursor. `highlightedId` would then name a participant who is no longer on
+   * the roster, and `PickupMap` reads a set highlight as "the organizer is inspecting something"
+   * and suppresses refitting while it lasts. The map therefore stayed framed as it was *before*
+   * the delete -- which, when the row deleted was the geocoder's absurd outlier, means it stayed
+   * zoomed out around a pin that is no longer there, until some unrelated hover cleared it.
+   *
+   * Adjusted during render rather than in an effect, like `chosenMode` below: an effect would
+   * commit one frame with the stale id and refit a beat later.
+   */
+  if (highlightedId !== null && roster.isSuccess && !people.some((p) => p.id === highlightedId)) {
+    setHighlightedId(null);
+  }
   // Everything written today carries coordinates, but they are nullable on read by design, so the
   // map plots only those that have them rather than assuming.
   const located = people.filter(isLocated);
@@ -177,6 +203,11 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
             body: { pickup: { address: person.pickup.address, ...point } },
           });
         }}
+        draft={draftPickup}
+        onDraft={(point) => setDraftPickup({ ...point, byHand: true })}
+        // Only while that form is the open tab: on the paste tab a click on the map is someone
+        // reading it, and dropping a stray pin there would be an answer to a question nobody asked.
+        placing={addMode === "one"}
       />
     );
 
@@ -296,14 +327,15 @@ export default function EventPage({ params }: PageProps<"/events/[publicId]">) {
                 another.
               </Problem>
             ) : (
-              <>
-                <PasteRoster publicId={publicId} seatsLeft={seatsLeft} onImported={refreshRoster} />
-                <AddParticipantForm
-                  publicId={publicId}
-                  disabled={seatsLeft === 0}
-                  onAdded={refreshRoster}
-                />
-              </>
+              <AddPeople
+                publicId={publicId}
+                seatsLeft={seatsLeft}
+                onChanged={refreshRoster}
+                mode={addMode}
+                onMode={setAddMode}
+                pickup={draftPickup}
+                onPickup={setDraftPickup}
+              />
             )}
           </RailSection>
         </>
