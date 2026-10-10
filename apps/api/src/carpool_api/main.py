@@ -94,10 +94,18 @@ async def _general_limit(
 
 
 def create_app() -> FastAPI:
+    # Production serves no schema or docs pages. Nothing calls them -- the web client's types are
+    # generated at build time (carpool_api.contract), which builds the schema from the routes and
+    # does not depend on these URLs -- and a public Swagger page is a search result for the brand
+    # name that competes with the landing page. Development keeps all three.
+    docs = get_settings().environment != "production"
     app = FastAPI(
         title="CarpoolOptimizer API",
         version="0.1.0",
         lifespan=lifespan,
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
     )
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(RateLimited, _rate_limited)
