@@ -1,0 +1,308 @@
+{
+  "arrival_at": "2026-10-15T23:00:00Z",
+  "ends_at": "2026-10-16T01:00:00Z",
+  "name": "Club tennis \u2014 Thursday practice",
+  "people": [
+    {
+      "display_name": "Maya R.",
+      "id": "54dd08b3-a22e-5441-a830-0bc03e2c8d4e",
+      "lat": 43.01806,
+      "lng": -89.521933,
+      "role": "driver"
+    },
+    {
+      "display_name": "Theo K.",
+      "id": "1ad46af4-4370-544e-bd92-4c37d216356c",
+      "lat": 43.001553,
+      "lng": -89.524727,
+      "role": "driver"
+    },
+    {
+      "display_name": "Priya S.",
+      "id": "99d0c3ba-679f-5df9-84bf-cb5795d807bf",
+      "lat": 43.000654,
+      "lng": -89.492131,
+      "role": "driver"
+    },
+    {
+      "display_name": "Jordan L.",
+      "id": "f4a07dee-284c-5dc0-a611-a46bdf1604fd",
+      "lat": 43.022919,
+      "lng": -89.456869,
+      "role": "driver"
+    },
+    {
+      "display_name": "Sam W.",
+      "id": "0276789f-7c3f-5603-bb3b-d4d0c9f54ff6",
+      "lat": 43.010194,
+      "lng": -89.517414,
+      "role": "passenger"
+    },
+    {
+      "display_name": "Elena M.",
+      "id": "fc8c69af-4d52-58d6-b3aa-c3ea0d87e0a4",
+      "lat": 43.02213,
+      "lng": -89.515753,
+      "role": "passenger"
+    },
+    {
+      "display_name": "Marcus T.",
+      "id": "d8695992-24c1-591e-9431-87c78765409a",
+      "lat": 43.011315,
+      "lng": -89.510947,
+      "role": "passenger"
+    },
+    {
+      "display_name": "Hana Y.",
+      "id": "7ebba493-82b0-57f7-87a5-5255e0b195fb",
+      "lat": 43.032643,
+      "lng": -89.452801,
+      "role": "passenger"
+    },
+    {
+      "display_name": "Diego F.",
+      "id": "67ddcbd3-eab9-5362-abb8-225f0520bf3a",
+      "lat": 43.012412,
+      "lng": -89.5001,
+      "role": "passenger"
+    },
+    {
+      "display_name": "Ava P.",
+      "id": "54007a2b-9c50-555d-ac06-9217b55784e7",
+      "lat": 43.015401,
+      "lng": -89.513081,
+      "role": "passenger"
+    },
+    {
+      "display_name": "Noah B.",
+      "id": "e7bf11b3-f105-5694-be86-30da04aaadc3",
+      "lat": 43.000171,
+      "lng": -89.510761,
+      "role": "passenger"
+    },
+    {
+      "display_name": "Lena C.",
+      "id": "1c95deb6-e916-5a7c-9525-2ade91dcd3a5",
+      "lat": 43.019295,
+      "lng": -89.482517,
+      "role": "passenger"
+    }
+  ],
+  "solution": {
+    "algorithm": "greedy",
+    "created_at": "2026-10-14T23:00:00Z",
+    "id": "75651925-f55b-530c-8231-764d7ea0e817",
+    "input_version": 1,
+    "is_active": true,
+    "is_stale": false,
+    "job_id": "bc41a22e-f94a-5d0c-a8f3-b99b5d2a82c9",
+    "metrics": {
+      "churn": 0,
+      "drive_s": 6860,
+      "driver_detour_s": 1426,
+      "gap_to_bound": null,
+      "p95_detour_s": 470,
+      "passenger_ride_s": 9872,
+      "unassigned": 0,
+      "vehicles": 4
+    },
+    "objective_value": 15622.0,
+    "routes": [
+      {
+        "detour_seconds": 276,
+        "driver_name": "Maya R.",
+        "driver_participant_id": "54dd08b3-a22e-5441-a830-0bc03e2c8d4e",
+        "id": "9cd37b14-3cba-533e-bba0-95a65ca99864",
+        "inbound": {
+          "leg": "return",
+          "stops": [
+            {
+              "display_name": "Elena M.",
+              "eta": "2026-10-16T01:06:58Z",
+              "participant_id": "fc8c69af-4d52-58d6-b3aa-c3ea0d87e0a4",
+              "pickup_address": "1.8 mi south of the courts",
+              "seq": 0
+            },
+            {
+              "display_name": "Ava P.",
+              "eta": "2026-10-16T01:08:51Z",
+              "participant_id": "54007a2b-9c50-555d-ac06-9217b55784e7",
+              "pickup_address": "2.2 mi south of the courts",
+              "seq": 1
+            }
+          ]
+        },
+        "outbound": {
+          "leg": "outbound",
+          "stops": [
+            {
+              "display_name": "Ava P.",
+              "eta": "2026-10-15T22:51:09Z",
+              "participant_id": "54007a2b-9c50-555d-ac06-9217b55784e7",
+              "pickup_address": "2.2 mi south of the courts",
+              "seq": 0
+            },
+            {
+              "display_name": "Elena M.",
+              "eta": "2026-10-15T22:53:02Z",
+              "participant_id": "fc8c69af-4d52-58d6-b3aa-c3ea0d87e0a4",
+              "pickup_address": "1.8 mi south of the courts",
+              "seq": 1
+            }
+          ]
+        },
+        "seats_used": 2,
+        "total_distance_m": 11482,
+        "total_duration_s": 1288
+      },
+      {
+        "detour_seconds": 470,
+        "driver_name": "Theo K.",
+        "driver_participant_id": "1ad46af4-4370-544e-bd92-4c37d216356c",
+        "id": "3d78bfd3-574a-55d3-a0b5-a1e6e872523e",
+        "inbound": {
+          "leg": "return",
+          "stops": [
+            {
+              "display_name": "Marcus T.",
+              "eta": "2026-10-16T01:09:37Z",
+              "participant_id": "d8695992-24c1-591e-9431-87c78765409a",
+              "pickup_address": "2.5 mi south of the courts",
+              "seq": 0
+            },
+            {
+              "display_name": "Sam W.",
+              "eta": "2026-10-16T01:10:56Z",
+              "participant_id": "0276789f-7c3f-5603-bb3b-d4d0c9f54ff6",
+              "pickup_address": "2.6 mi south of the courts",
+              "seq": 1
+            },
+            {
+              "display_name": "Noah B.",
+              "eta": "2026-10-16T01:13:57Z",
+              "participant_id": "e7bf11b3-f105-5694-be86-30da04aaadc3",
+              "pickup_address": "3.2 mi south of the courts",
+              "seq": 2
+            }
+          ]
+        },
+        "outbound": {
+          "leg": "outbound",
+          "stops": [
+            {
+              "display_name": "Noah B.",
+              "eta": "2026-10-15T22:46:03Z",
+              "participant_id": "e7bf11b3-f105-5694-be86-30da04aaadc3",
+              "pickup_address": "3.2 mi south of the courts",
+              "seq": 0
+            },
+            {
+              "display_name": "Sam W.",
+              "eta": "2026-10-15T22:49:04Z",
+              "participant_id": "0276789f-7c3f-5603-bb3b-d4d0c9f54ff6",
+              "pickup_address": "2.6 mi south of the courts",
+              "seq": 1
+            },
+            {
+              "display_name": "Marcus T.",
+              "eta": "2026-10-15T22:50:23Z",
+              "participant_id": "d8695992-24c1-591e-9431-87c78765409a",
+              "pickup_address": "2.5 mi south of the courts",
+              "seq": 2
+            }
+          ]
+        },
+        "seats_used": 3,
+        "total_distance_m": 17864,
+        "total_duration_s": 2008
+      },
+      {
+        "detour_seconds": 408,
+        "driver_name": "Priya S.",
+        "driver_participant_id": "99d0c3ba-679f-5df9-84bf-cb5795d807bf",
+        "id": "eafc5fe1-c559-58aa-92ea-15c0503343f0",
+        "inbound": {
+          "leg": "return",
+          "stops": [
+            {
+              "display_name": "Lena C.",
+              "eta": "2026-10-16T01:08:33Z",
+              "participant_id": "1c95deb6-e916-5a7c-9525-2ade91dcd3a5",
+              "pickup_address": "2.2 mi southeast of the courts",
+              "seq": 0
+            },
+            {
+              "display_name": "Diego F.",
+              "eta": "2026-10-16T01:12:30Z",
+              "participant_id": "67ddcbd3-eab9-5362-abb8-225f0520bf3a",
+              "pickup_address": "2.4 mi south of the courts",
+              "seq": 1
+            }
+          ]
+        },
+        "outbound": {
+          "leg": "outbound",
+          "stops": [
+            {
+              "display_name": "Diego F.",
+              "eta": "2026-10-15T22:47:30Z",
+              "participant_id": "67ddcbd3-eab9-5362-abb8-225f0520bf3a",
+              "pickup_address": "2.4 mi south of the courts",
+              "seq": 0
+            },
+            {
+              "display_name": "Lena C.",
+              "eta": "2026-10-15T22:51:27Z",
+              "participant_id": "1c95deb6-e916-5a7c-9525-2ade91dcd3a5",
+              "pickup_address": "2.2 mi southeast of the courts",
+              "seq": 1
+            }
+          ]
+        },
+        "seats_used": 2,
+        "total_distance_m": 17142,
+        "total_duration_s": 1926
+      },
+      {
+        "detour_seconds": 272,
+        "driver_name": "Jordan L.",
+        "driver_participant_id": "f4a07dee-284c-5dc0-a611-a46bdf1604fd",
+        "id": "1cf76af4-f9b4-5f9a-913e-6e58ecf738dc",
+        "inbound": {
+          "leg": "return",
+          "stops": [
+            {
+              "display_name": "Hana Y.",
+              "eta": "2026-10-16T01:10:54Z",
+              "participant_id": "7ebba493-82b0-57f7-87a5-5255e0b195fb",
+              "pickup_address": "2.8 mi east of the courts",
+              "seq": 0
+            }
+          ]
+        },
+        "outbound": {
+          "leg": "outbound",
+          "stops": [
+            {
+              "display_name": "Hana Y.",
+              "eta": "2026-10-15T22:49:06Z",
+              "participant_id": "7ebba493-82b0-57f7-87a5-5255e0b195fb",
+              "pickup_address": "2.8 mi east of the courts",
+              "seq": 0
+            }
+          ]
+        },
+        "seats_used": 1,
+        "total_distance_m": 14572,
+        "total_duration_s": 1638
+      }
+    ],
+    "unassigned": []
+  },
+  "time_zone": "America/Chicago",
+  "venue": {
+    "address": "The practice courts",
+    "lat": 43.0465,
+    "lng": -89.5045
+  }
+}

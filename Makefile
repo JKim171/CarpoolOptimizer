@@ -1,5 +1,5 @@
 .PHONY: setup hooks test lint fmt typecheck check audit lock db migrate revision api \
-        web-setup web web-check openapi
+        web-setup web web-check openapi demo
 
 # Runtime dependencies come from the hashed lock, the local packages are installed on top without
 # resolving anything, and the dev tools last. CI installs in the same three steps.
@@ -73,3 +73,9 @@ openapi:
 	DATABASE_URL=postgresql+asyncpg://unused/unused \
 	  .venv/bin/python -m carpool_api.contract apps/web/lib/api/openapi.json
 	cd apps/web && npm run types:generate
+
+# Regenerate the example event behind /demo. Run this after changing the solver, the generator or a
+# solution schema; test_demo.py fails the build when the committed file no longer matches.
+demo:
+	DATABASE_URL=postgresql+asyncpg://unused/unused \
+	  .venv/bin/python -m carpool_api.demo apps/web/lib/demo/event.json
