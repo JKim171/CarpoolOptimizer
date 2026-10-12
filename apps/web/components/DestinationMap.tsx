@@ -25,6 +25,7 @@ import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
+import { applyMapPalette } from "@/components/map/palette";
 import { MapFrame } from "@/components/map/MapFrame";
 import { venuePin } from "@/components/map/markers";
 import { useLiveColorScheme } from "@/lib/colorScheme";
@@ -68,6 +69,11 @@ export function DestinationMap({
       attributionControl: { compact: true },
     });
     instance.addControl(new NavigationControl({ showCompass: false }), "top-right");
+
+    // `style.load`, not `load`: it fires for the first style and for every one `setStyle` swaps in,
+    // and a swapped style arrives with its own shipped ground. `applied.current` is already the new
+    // scheme by the time this runs, which is what makes it the right thing to read.
+    instance.on("style.load", () => applyMapPalette(instance, applied.current));
 
     // If tiles fail the list view must stay usable -- the map is never the only path to an answer
     // (docs/design.md 7.5). The form below still takes a typed address and coordinates.

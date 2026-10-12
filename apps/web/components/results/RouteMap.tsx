@@ -17,6 +17,7 @@ import { Map as MapLibreMap, Marker, NavigationControl, type GeoJSONSource } fro
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
+import { applyMapPalette } from "@/components/map/palette";
 import { MapFrame } from "@/components/map/MapFrame";
 import { homePin, stopPin, venuePin } from "@/components/map/markers";
 import { useLiveColorScheme } from "@/lib/colorScheme";
@@ -121,6 +122,7 @@ export function RouteMap({
     // `style.load`, not `load`: it fires for the first style *and* for every one `setStyle` swaps
     // in, which is what keeps the lines alive across a theme change.
     instance.on("style.load", () => {
+      applyMapPalette(instance, applied.current);
       addRouteLayer(instance);
       setReady(true);
     });

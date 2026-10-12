@@ -48,52 +48,52 @@
 
 :root {
   color-scheme: light;
-  --surface: #faf8f3;
+  --surface: #f1ebdf;
   /* Inputs and the few things that still need a plane of their own. Lighter than the page, not
      darker: ink sits on paper, and a sunken field reads as a hole in it. */
-  --surface-raised: #ffffff;
-  --surface-sunken: #f1ede4;
-  --line: #e2dbcd;
-  --line-strong: #b9ae99;
+  --surface-raised: #fbf8f2;
+  --surface-sunken: #e7e0d1;
+  --line: #d9d0be;
+  --line-strong: #b2a68e;
   --ink: #1c1a16;
-  --ink-muted: #6d6456;
+  --ink-muted: #635a4b;
   --accent: #1f3864;
   --accent-hover: #142747;
-  --accent-ink: #faf8f3;
+  --accent-ink: #f1ebdf;
   /* A tinted chip, not a fill: `accent-ink` is the text *on* `accent`, which is the opposite
      relationship. Used where a value has to be picked out of a dense column -- the driver mark in a
      fifty-row roster. Both pairs clear 7:1, which small text at `text-xs` needs. */
-  --accent-soft: #e7ecf5;
+  --accent-soft: #e0e7f2;
   --accent-soft-ink: #1f3864;
-  --danger-surface: #fbeeea;
-  --danger-ink: #8f2c17;
+  --danger-surface: #f7e7e1;
+  --danger-ink: #8a2a16;
   /* Warn had ink only, which was enough while it was one line of text. The unassigned block is a
      whole section: people left without a ride have to be as visible as the cars that were filled. */
-  --warn-surface: #fdf4e2;
-  --warn-line: #e0c07a;
-  --warn-ink: #7c5410;
+  --warn-surface: #f8eed6;
+  --warn-line: #d7b56e;
+  --warn-ink: #74500f;
 }
 
 /* dark palette: following the OS -- keep in step with the chosen-dark block below */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --surface: #15130f;
-    --surface-raised: #1e1b16;
-    --surface-sunken: #272319;
-    --line: #342f25;
-    --line-strong: #534b3a;
+    --surface: #221f19;
+    --surface-raised: #2c2822;
+    --surface-sunken: #37322a;
+    --line: #423c31;
+    --line-strong: #675e4a;
     --ink: #ece6da;
-    --ink-muted: #9d9281;
+    --ink-muted: #ada293;
     --accent: #9cb8e6;
     --accent-hover: #c0d2f0;
-    --accent-ink: #15130f;
-    --accent-soft: #1d2740;
+    --accent-ink: #221f19;
+    --accent-soft: #242f49;
     --accent-soft-ink: #a8c2ec;
-    --danger-surface: #2d1511;
+    --danger-surface: #3a1d17;
     --danger-ink: #f0a894;
-    --warn-surface: #241c08;
-    --warn-line: #4b3c13;
+    --warn-surface: #30260f;
+    --warn-line: #5a4918;
     --warn-ink: #e3b863;
   }
 }
@@ -101,22 +101,22 @@
 /* dark palette: chosen explicitly -- keep in step with the follows-the-OS block above */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --surface: #15130f;
-  --surface-raised: #1e1b16;
-  --surface-sunken: #272319;
-  --line: #342f25;
-  --line-strong: #534b3a;
+  --surface: #221f19;
+  --surface-raised: #2c2822;
+  --surface-sunken: #37322a;
+  --line: #423c31;
+  --line-strong: #675e4a;
   --ink: #ece6da;
-  --ink-muted: #9d9281;
+  --ink-muted: #ada293;
   --accent: #9cb8e6;
   --accent-hover: #c0d2f0;
-  --accent-ink: #15130f;
-  --accent-soft: #1d2740;
+  --accent-ink: #221f19;
+  --accent-soft: #242f49;
   --accent-soft-ink: #a8c2ec;
-  --danger-surface: #2d1511;
+  --danger-surface: #3a1d17;
   --danger-ink: #f0a894;
-  --warn-surface: #241c08;
-  --warn-line: #4b3c13;
+  --warn-surface: #30260f;
+  --warn-line: #5a4918;
   --warn-ink: #e3b863;
 }
 

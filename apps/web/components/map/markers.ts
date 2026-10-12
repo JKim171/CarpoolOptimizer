@@ -22,26 +22,30 @@
  * themes and only the two *ground-dependent* values below change.
  */
 
+import { GROUND_COLOR } from "@/components/map/palette";
 import { destinationColor } from "@/lib/results/colors";
 import type { ColorScheme } from "@/lib/colorScheme";
 
 /**
  * The two values that depend on the ground rather than on what is being drawn.
  *
- * `ring` separates a pin from the tiles under it, so it has to approximate the ground: white on
- * `positron`'s pale grey, near-black on `dark`'s `rgb(12,12,12)`. A white ring on the dark basemap
- * would be the brightest thing on the screen and would draw the eye to the outline of a marker
- * rather than to its colour.
+ * `ring` separates a pin from the tiles under it, so it has to approximate the ground -- and the
+ * ground is now a value this app sets rather than one the tiles bring, so it is read from
+ * `components/map/ground.ts` instead of being a second copy of the same hex. A white ring on the
+ * dark basemap would be the brightest thing on the screen and would draw the eye to the outline of
+ * a marker rather than to its colour.
  *
  * `onColor` is text set *on* a car's colour -- the digit in a numbered stop. This is the one that
  * cannot simply be inverted along with everything else: the light palette is dark and saturated so
  * its digits are white, while the dark palette is deliberately *bright* (`#fde047` is a yellow) so
  * a white digit on it would be unreadable. Every dark-palette colour clears 7:1 against near-black,
- * so the digit flips with the theme.
+ * so the digit flips with the theme. **It does not follow the ground**: it is set on a mark, not on
+ * the map, so it stays at the extremes where the contrast is, which is why these two are now
+ * separate values rather than one pair.
  */
 const GROUND = {
-  light: { ring: "#ffffff", onColor: "#ffffff" },
-  dark: { ring: "#0c0c0c", onColor: "#0c0c0c" },
+  light: { ring: GROUND_COLOR.light, onColor: "#ffffff" },
+  dark: { ring: GROUND_COLOR.dark, onColor: "#0c0c0c" },
 } as const;
 
 function ringOf(scheme: ColorScheme): string {

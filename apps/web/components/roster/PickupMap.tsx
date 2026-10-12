@@ -29,6 +29,7 @@ import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { FALLBACK_CENTER, styleFor } from "@/components/map/basemap";
+import { applyMapPalette } from "@/components/map/palette";
 import { MapFrame } from "@/components/map/MapFrame";
 import { draftPin, personPin, venuePin } from "@/components/map/markers";
 import type { LocatedParticipant } from "@/lib/api/participants";
@@ -121,7 +122,10 @@ export function PickupMap({
     instance.addControl(new NavigationControl({ showCompass: false }), "top-right");
     // `style.load`, not `load`: it fires for the first style and for every one `setStyle` swaps in,
     // so `ready` tracks the live style rather than only the first.
-    instance.on("style.load", () => setReady(true));
+    instance.on("style.load", () => {
+      applyMapPalette(instance, applied.current);
+      setReady(true);
+    });
     instance.on("error", (event) => {
       if (event.error?.message?.includes("style")) setFailed(true);
     });
