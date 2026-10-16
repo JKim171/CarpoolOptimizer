@@ -4,7 +4,7 @@ This package performs no I/O by design (docs/design.md 4.1) -- it is imported un
 by the worker, and by the benchmark harness.
 """
 
-from . import greedy
+from . import greedy, lns
 from .explain import unassigned_reason
 from .generate import DEFAULT_DESTINATION, Distribution, generate_instance
 from .models import (
@@ -54,6 +54,7 @@ __all__ = [
     "haversine_matrix",
     "haversine_meters",
     "inbound_schedule",
+    "lns",
     "outbound_schedule",
     "resequence",
     "route_feasible",

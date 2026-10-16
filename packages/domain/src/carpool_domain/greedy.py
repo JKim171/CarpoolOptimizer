@@ -12,7 +12,7 @@ be several orders of magnitude slower for no better result.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 from .models import DESTINATION, ProblemInstance, Role, Route, Solution
 from .objective import route_metrics
@@ -24,7 +24,7 @@ from .validate import route_feasible
 DEFAULT_CANDIDATE_DRIVERS = 10
 
 
-def _route_cost(instance: ProblemInstance, route: Route) -> float:
+def route_cost(instance: ProblemInstance, route: Route) -> float:
     """Weighted cost of one route, excluding the per-vehicle charge."""
     m = route_metrics(instance, route)
     w = instance.weights
@@ -40,12 +40,16 @@ def _positions(sequence: tuple[str, ...], rider: str) -> Iterator[tuple[str, ...
         yield (*sequence[:i], rider, *sequence[i:])
 
 
-def _best_insertion(
-    instance: ProblemInstance, route: Route, rider: str
+#: Prices one route for insertion. Large neighbourhood search passes a memoized one.
+RouteCost = Callable[[ProblemInstance, Route], float]
+
+
+def best_insertion(
+    instance: ProblemInstance, route: Route, rider: str, *, cost: RouteCost = route_cost
 ) -> tuple[Route, float] | None:
     """Cheapest feasible way to add `rider` to `route`, with its marginal cost, or None."""
     participant = instance.participant(rider)
-    base = _route_cost(instance, route)
+    base = cost(instance, route)
     outbound_options = (
         list(_positions(route.outbound, rider)) if participant.needs_outbound else [route.outbound]
     )
@@ -57,10 +61,9 @@ def _best_insertion(
     for outbound in outbound_options:
         for inbound in inbound_options:
             candidate = Route(route.driver_id, outbound, inbound)
-            if not route_feasible(instance, candidate):
-                continue
-            delta = _route_cost(instance, candidate) - base
-            if best is None or delta < best[1]:
+            delta = cost(instance, candidate) - base
+            # Pricing is cheaper than checking feasibility, so only a would-be winner is checked.
+            if (best is None or delta < best[1]) and route_feasible(instance, candidate):
                 best = (candidate, delta)
     return best
 
@@ -98,7 +101,7 @@ def solve(
             ):
                 routes[target] = Route(target)
             existing = routes.get(target)
-            insertion = _best_insertion(instance, existing, rider.id) if existing else None
+            insertion = best_insertion(instance, existing, rider.id) if existing else None
             if insertion is None:
                 unassigned.append(rider.id)
             else:
@@ -111,7 +114,7 @@ def solve(
         )[:candidate_drivers]
         best: tuple[str, Route, float] | None = None
         for route in candidates:
-            insertion = _best_insertion(instance, route, rider.id)
+            insertion = best_insertion(instance, route, rider.id)
             if insertion is not None and (best is None or insertion[1] < best[2]):
                 best = (route.driver_id, insertion[0], insertion[1])
 
@@ -120,7 +123,7 @@ def solve(
         # free and leaves every vehicle half empty.
         solo = Route(rider.id)
         can_open = rider.role.can_drive and route_feasible(instance, solo)
-        solo_cost = instance.weights.vehicle + _route_cost(instance, solo)
+        solo_cost = instance.weights.vehicle + route_cost(instance, solo)
         if can_open and (best is None or best[2] > solo_cost):
             routes[rider.id] = solo
         elif best is not None:
