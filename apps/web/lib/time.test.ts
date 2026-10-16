@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { instantToWallClock, wallClockToInstant } from "./time";
+import { instantToWallClock, twelveHourToWallClock, wallClockToInstant } from "./time";
 
 const DETROIT = "America/Detroit";
 
@@ -81,5 +81,29 @@ describe("instantToWallClock", () => {
 
     expect(instantToWallClock(instant, DETROIT)).toBe("2026-07-20T16:00");
     expect(instantToWallClock(instant, "America/Los_Angeles")).toBe("2026-07-20T13:00");
+  });
+});
+
+describe("twelveHourToWallClock", () => {
+  it("reads afternoon hours as PM", () => {
+    expect(twelveHourToWallClock("2026-07-20", "4", "30", "PM")).toBe("2026-07-20T16:30");
+    expect(twelveHourToWallClock("2026-07-20", "9", "05", "AM")).toBe("2026-07-20T09:05");
+  });
+
+  it("puts 12 AM at midnight and 12 PM at noon", () => {
+    expect(twelveHourToWallClock("2026-07-20", "12", "00", "AM")).toBe("2026-07-20T00:00");
+    expect(twelveHourToWallClock("2026-07-20", "12", "00", "PM")).toBe("2026-07-20T12:00");
+  });
+
+  it("reads a blank minute as on the hour", () => {
+    expect(twelveHourToWallClock("2026-07-20", "4", "", "PM")).toBe("2026-07-20T16:00");
+  });
+
+  it("returns empty for anything incomplete or out of range", () => {
+    expect(twelveHourToWallClock("", "4", "00", "PM")).toBe("");
+    expect(twelveHourToWallClock("2026-07-20", "", "00", "PM")).toBe("");
+    expect(twelveHourToWallClock("2026-07-20", "0", "00", "PM")).toBe("");
+    expect(twelveHourToWallClock("2026-07-20", "13", "00", "PM")).toBe("");
+    expect(twelveHourToWallClock("2026-07-20", "4", "60", "PM")).toBe("");
   });
 });

@@ -34,6 +34,35 @@ export function wallClockToInstant(value: string, timeZone: string): Date | null
   return new Date(date.getTime());
 }
 
+export type Meridiem = "AM" | "PM";
+
+/**
+ * A date and a twelve-hour clock reading, as the "YYYY-MM-DDTHH:mm" `wallClockToInstant` reads.
+ *
+ * The form asks for hour, minute and AM/PM separately, because the native `datetime-local` input
+ * shows `--:-- --` and leaves the meridiem blank until it is set. A blank minute is read as ":00",
+ * since "practice at 4" means 4:00. Returns "" for anything incomplete or out of range, so the
+ * form shows its usual message instead of guessing what was meant.
+ *
+ * 12 AM is midnight and 12 PM is noon, which is the convention people get wrong at 12.
+ */
+export function twelveHourToWallClock(
+  date: string,
+  hour: string,
+  minute: string,
+  meridiem: Meridiem,
+): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  if (!/^\d{1,2}$/.test(hour) || !/^\d{0,2}$/.test(minute)) return "";
+  const h = Number(hour);
+  const m = minute === "" ? 0 : Number(minute);
+  if (h < 1 || h > 12 || m > 59) return "";
+
+  const h24 = (h % 12) + (meridiem === "PM" ? 12 : 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date}T${pad(h24)}:${pad(m)}`;
+}
+
 /** The inverse: an instant rendered as the wall clock would read it in `timeZone`. */
 export function instantToWallClock(instant: Date, timeZone: string): string {
   const zoned = new TZDate(instant.getTime(), timeZone);

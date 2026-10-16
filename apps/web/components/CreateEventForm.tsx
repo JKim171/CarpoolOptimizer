@@ -18,6 +18,7 @@ import { useState } from "react";
 import { AddressField } from "@/components/AddressField";
 import type { Point } from "@/components/DestinationMap";
 import { Button, Field, Problem, Select, TextInput } from "@/components/ui/controls";
+import { WallClockInput } from "@/components/WallClockInput";
 import { ApiError } from "@/lib/api/client";
 import { createEvent } from "@/lib/api/events";
 import type { Place } from "@/lib/api/geocode";
@@ -69,7 +70,9 @@ export function CreateEventForm({
     const arrivalAt = wallClockToInstant(arrival, timeZone);
     const endsAt = wallClockToInstant(ends, timeZone);
     if (!arrivalAt || !endsAt) {
-      setProblem("Enter both an arrival time and an end time.");
+      setProblem(
+        "Enter a date and a time (hour 1–12, minute 0–59) for both the arrival and the end.",
+      );
       return;
     }
     if (endsAt <= arrivalAt) {
@@ -121,20 +124,10 @@ export function CreateEventForm({
       />
 
       <Field label="Everyone arrives by">
-        <TextInput
-          type="datetime-local"
-          value={arrival}
-          onChange={(event) => setArrival(event.target.value)}
-          required
-        />
+        <WallClockInput label="Everyone arrives by" onChange={setArrival} />
       </Field>
       <Field label="Event ends">
-        <TextInput
-          type="datetime-local"
-          value={ends}
-          onChange={(event) => setEnds(event.target.value)}
-          required
-        />
+        <WallClockInput label="Event ends" onChange={setEnds} />
       </Field>
 
       <Field
