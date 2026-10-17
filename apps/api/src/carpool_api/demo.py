@@ -39,6 +39,7 @@ from carpool_domain import (
     greedy,
     haversine_meters,
     inbound_schedule,
+    lns,
     outbound_schedule,
     route_metrics,
     validate,
@@ -59,6 +60,9 @@ PRACTICE_SECONDS = 2 * 60 * 60
 #: out at different sizes, which is what a real roster looks like.
 SEED = 5
 RADIUS_KM = 5.0
+#: Production runs LNS on a wall-clock budget; a budget in moves instead keeps the file the same
+#: bytes on every machine. Comfortably more than a one-second solve gets through at this size.
+LNS_ITERATIONS = 5_000
 NAMES = (
     "Maya R.",
     "Theo K.",
@@ -151,7 +155,9 @@ def build() -> DemoEvent:
     estimates = haversine_estimates(nodes)
     instance = dataclasses.replace(generated, participants=participants, matrix=estimates.matrix)
 
-    solution = greedy.solve(instance)
+    solution = lns.solve(
+        instance, initial=greedy.solve(instance), iterations=LNS_ITERATIONS, seed=SEED
+    )
     if violations := validate(instance, solution):
         raise ValueError(f"the demo solution is infeasible: {violations}")
     if solution.unassigned:
@@ -217,7 +223,7 @@ def build() -> DemoEvent:
         solution=SolutionRead(
             id=_id("solution"),
             job_id=_id("job"),
-            algorithm="greedy",
+            algorithm="lns",
             objective_value=objective_value,
             metrics=metrics,
             is_active=True,
