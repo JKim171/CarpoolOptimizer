@@ -19,9 +19,9 @@ class Settings(BaseSettings):
     #: SQLAlchemy URL for the async driver, e.g. postgresql+asyncpg://user:pass@host:5432/carpool
     database_url: str
 
-    #: openrouteservice key. Used by the geocoding proxy; the matrix adapter joins it in Week 4
-    #: (docs/design.md 4.4). Optional so that the app still starts without it -- the geocoding
-    #: endpoints then answer 503 rather than the whole service failing to boot.
+    #: openrouteservice key, for the geocoding proxy and the travel matrix (docs/design.md 4.4).
+    #: Optional so that the app still starts without it -- the geocoding endpoints then answer 503
+    #: and solves run on straight-line estimates, rather than the whole service failing to boot.
     ors_api_key: str | None = None
 
     #: `api.openrouteservice.org` is deprecated in favour of this one (docs/design.md 4.4). In

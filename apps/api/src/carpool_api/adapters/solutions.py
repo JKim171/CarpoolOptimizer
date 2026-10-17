@@ -78,6 +78,9 @@ def solution_metrics(
         "unassigned": len(solution.unassigned),
         "churn": breakdown.churn,
         "gap_to_bound": None,
+        #: "ors" for road times, "haversine" for straight-line estimates -- which every number
+        #: above was computed from.
+        "travel": loaded.estimates.provider,
     }
     return breakdown.total, metrics
 

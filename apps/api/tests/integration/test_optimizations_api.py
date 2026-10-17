@@ -9,11 +9,16 @@ for anyone left out.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
+from typing import Any
 
 from httpx import AsyncClient
 from roster import add, optimize, other_event, person, seed_roster
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+
+from carpool_api.adapters.travel import TravelEstimates, TravelUnavailable, haversine_estimates
+from carpool_domain import Location, NodeId
 
 
 async def test_optimizing_an_event_succeeds_inline(
@@ -823,3 +828,84 @@ async def test_preserving_is_its_own_problem_and_is_reused_as_one(
 
     assert preserving["job_id"] != first["job_id"]
     assert repeated["job_id"] == preserving["job_id"]
+
+
+class RoadTimes:
+    """Stands in for the matrix provider: counts requests, and answers as "ors" would."""
+
+    provider = "ors"
+
+    def __init__(self, *, fails: bool = False) -> None:
+        self.fails = fails
+        self.requests = 0
+
+    async def estimates(self, nodes: Mapping[NodeId, Location]) -> TravelEstimates:
+        self.requests += 1
+        if self.fails:
+            raise TravelUnavailable("the routing provider returned 429")
+        straight = haversine_estimates(nodes)
+        return TravelEstimates(
+            matrix=straight.matrix, _distances_m=straight._distances_m, provider="ors"
+        )
+
+
+async def _metrics(engine: AsyncEngine, solution_id: str) -> dict[str, Any]:
+    async with engine.connect() as conn:
+        found = await conn.execute(
+            text("select metrics from solutions where id = :s"), {"s": solution_id}
+        )
+        metrics: dict[str, Any] = found.scalar_one()
+    return metrics
+
+
+async def test_a_solve_costs_one_matrix_request_and_says_it_used_road_times(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    travel: Any,
+) -> None:
+    """One request per solve against a 500/day quota (docs/design.md 4.4) -- the request that
+    enqueues must not fetch a matrix of its own -- and none at all for a reused answer."""
+    travel.current = provider = RoadTimes()
+    await seed_roster(api_client, organizer_event)
+
+    job = await optimize(api_client, organizer_event)
+    await optimize(api_client, organizer_event, expect=200)
+
+    assert provider.requests == 1
+    assert (await _metrics(engine, job["solution_id"]))["travel"] == "ors"
+
+
+async def test_a_provider_failure_solves_on_estimates_and_asks_again_next_time(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    travel: Any,
+) -> None:
+    """Estimates are the fallback when the quota runs out (docs/design.md 2.4), and an answer built
+    on them must not be handed back as the answer once the provider is back."""
+    travel.current = provider = RoadTimes(fails=True)
+    await seed_roster(api_client, organizer_event)
+
+    estimated = await optimize(api_client, organizer_event)
+    provider.fails = False
+    retried = await optimize(api_client, organizer_event)
+
+    assert estimated["status"] == "succeeded"
+    assert (await _metrics(engine, estimated["solution_id"]))["travel"] == "haversine"
+    assert retried["job_id"] != estimated["job_id"]
+    assert (await _metrics(engine, retried["solution_id"]))["travel"] == "ors"
+    assert provider.requests == 2
+
+
+async def test_an_answer_on_estimates_is_not_reused_once_road_times_exist(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], travel: Any
+) -> None:
+    """What a deploy that adds the key does to every event solved before it."""
+    await seed_roster(api_client, organizer_event)
+    before = await optimize(api_client, organizer_event)
+
+    travel.current = RoadTimes()
+    after = await optimize(api_client, organizer_event)
+
+    assert after["job_id"] != before["job_id"]

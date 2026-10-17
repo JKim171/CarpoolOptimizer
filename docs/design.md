@@ -291,6 +291,15 @@ durations arrive as floats and are rounded to integer seconds; a `null` cell mea
 point and becomes an `unassigned` reason, not a crash; each point's `snapped_distance` is kept,
 because a snap of hundreds of metres is a free signal that an address geocoded wrong (§7.2).
 
+**When the matrix request fails, the solve runs on haversine estimates rather than failing**
+(built 2026-10-17, `adapters/travel.py`). A quota-exhausted 429, a timeout, a malformed body and a
+`null` cell all take that path — a `null` cell for now, until the domain can route around a missing
+pair and report the person as unassigned instead. The answer records `metrics.travel = "haversine"`,
+and its job's fingerprint is re-taken for the provider that actually answered, so the next request
+for the same problem asks ORS again instead of being handed the estimate. The configured provider
+is part of `input_fingerprint`, so adding the key to a deployment does not reuse a single answer
+computed without it.
+
 **Route geometry is fetched lazily.** Drawing a route takes one Directions call per car per leg —
 ~30 for a 50-person event, most of the per-minute quota and ~66 solves/day. So geometry is fetched
 when someone first opens a route and then persisted (§7.5); a rider opening their own car costs

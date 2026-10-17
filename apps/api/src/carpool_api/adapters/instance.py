@@ -16,7 +16,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,12 +47,6 @@ class MissingCoordinates(Exception):
     def __init__(self, participant_ids: Sequence[str]) -> None:
         self.participant_ids = tuple(participant_ids)
         super().__init__(f"no coordinates for participant(s): {', '.join(self.participant_ids)}")
-
-
-class EstimatesFor(Protocol):
-    """The routing seam. Week 4 passes an openrouteservice-backed implementation instead."""
-
-    def __call__(self, nodes: Mapping[NodeId, Location]) -> TravelEstimates: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,32 +101,46 @@ async def active_roster(
     return [(row[0], row[1], row[2]) for row in found.all()]
 
 
+def nodes_of(
+    roster: Sequence[tuple[Participant, float | None, float | None]], destination: Location
+) -> dict[NodeId, Location]:
+    """Every node the travel matrix has to cover: the destination and each participant.
+
+    Separate from `build_instance` because fetching travel times is I/O and building the instance is
+    not: the caller asks the provider for these nodes, then hands the answer in.
+    """
+    missing = [str(row.id) for row, lat, lng in roster if lat is None or lng is None]
+    if missing:
+        raise MissingCoordinates(missing)
+    nodes: dict[NodeId, Location] = {DESTINATION: destination}
+    for row, lat, lng in roster:
+        # Guarded above; the narrowing is for the type checker, which cannot see it.
+        assert lat is not None
+        assert lng is not None
+        nodes[str(row.id)] = Location(lat=lat, lng=lng)
+    return nodes
+
+
 def build_instance(
     event: Event,
     roster: Sequence[tuple[Participant, float | None, float | None]],
     destination: Location,
     *,
     weights: Weights,
-    estimates_for: EstimatesFor = haversine_estimates,
+    estimates: TravelEstimates | None = None,
 ) -> LoadedInstance:
-    """Assemble the instance. Pure given its inputs -- the querying is `active_roster`'s job."""
-    missing = [str(row.id) for row, lat, lng in roster if lat is None or lng is None]
-    if missing:
-        raise MissingCoordinates(missing)
-
+    """Assemble the instance. Pure given its inputs -- the querying is `active_roster`'s job, and
+    the travel times are the caller's: `estimates` must cover `nodes_of(roster, destination)`, and
+    straight-line estimates stand in when it is omitted."""
+    nodes = nodes_of(roster, destination)
     rows = {str(row.id): row for row, _, _ in roster}
-    nodes: dict[NodeId, Location] = {DESTINATION: destination}
     participants = []
-    for row, lat, lng in roster:
+    for row, _, _ in roster:
         node_id = str(row.id)
-        # Guarded above; the narrowing is for the type checker, which cannot see it.
-        assert lat is not None
-        assert lng is not None
-        nodes[node_id] = Location(lat=lat, lng=lng)
         participants.append(
             DomainParticipant(
                 id=node_id,
-                location=Location(lat=lat, lng=lng),
+                location=nodes[node_id],
                 role=_ROLES[row.role],
                 seats=row.seats_available,
                 priority=row.priority,
@@ -150,7 +157,8 @@ def build_instance(
             )
         )
 
-    estimates = estimates_for(nodes)
+    if estimates is None:
+        estimates = haversine_estimates(nodes)
     instance = ProblemInstance(
         destination=destination,
         arrival_by=int(event.arrival_at.timestamp()),

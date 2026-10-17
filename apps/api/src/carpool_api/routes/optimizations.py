@@ -45,13 +45,15 @@ from sqlalchemy.orm import selectinload
 import carpool_domain
 from carpool_api.adapters.fingerprint import input_fingerprint
 from carpool_api.adapters.instance import (
-    LoadedInstance,
     MissingCoordinates,
     active_roster,
     build_instance,
+    nodes_of,
 )
 from carpool_api.adapters.solutions import build_solution_rows
+from carpool_api.adapters.travel import Haversine, OrsMatrix, Travel, estimates_or_fallback
 from carpool_api.auth import OrganizerEvent
+from carpool_api.config import Settings, get_settings
 from carpool_api.db import get_session
 from carpool_api.errors import violates
 from carpool_api.geo import latitude_of, longitude_of
@@ -68,11 +70,26 @@ from carpool_api.ratelimit import SOLVES, Limiter, SolveSlots
 from carpool_api.schemas.events import weights_of
 from carpool_api.schemas.optimizations import JobConflict, JobRead, OptimizationCreate
 from carpool_api.schemas.weights import Weights
-from carpool_domain import Location, ProblemInstance, Route, greedy, lns, validate
+from carpool_domain import Location, NodeId, ProblemInstance, Route, greedy, lns, validate
 
 router = APIRouter(prefix="/v1/events/{public_id}/optimizations", tags=["optimizations"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+def get_travel(settings: Annotated[Settings, Depends(get_settings)]) -> Travel:
+    """Road times when a provider key is configured, straight-line estimates when not.
+
+    A dependency so tests can substitute a provider that makes no network call -- the local `.env`
+    carries a real key, and a test suite spending the shared matrix quota would be a test suite that
+    fails when the quota does.
+    """
+    return OrsMatrix(settings) if settings.ors_api_key else Haversine()
+
+
+TravelProvider = Annotated[Travel, Depends(get_travel)]
+
+Roster = list[tuple[Participant, float | None, float | None]]
 
 _IN_FLIGHT = (JobStatus.QUEUED, JobStatus.RUNNING)
 _IN_FLIGHT_INDEX = "one_active_job_per_event"
@@ -241,9 +258,13 @@ async def _read(session: AsyncSession, job: OptimizationJob, public_id: str) -> 
 
 
 async def _load(
-    session: AsyncSession, event: Event, weights: Weights
-) -> tuple[LoadedInstance, list[Participant]]:
-    """The instance to solve, and the rows it was built from (which the fingerprint needs)."""
+    session: AsyncSession, event: Event
+) -> tuple[Roster, Location, dict[NodeId, Location]]:
+    """The roster to solve, its destination, and the nodes travel times are needed for.
+
+    No travel times: those cost a provider request, so only the solve fetches them. Asking for the
+    nodes here is still what refuses a roster that cannot be solved, before a job is created.
+    """
     roster = await active_roster(session, event)
     if not roster:
         raise HTTPException(
@@ -252,12 +273,12 @@ async def _load(
         )
     destination = await _destination(session, event)
     try:
-        loaded = build_instance(event, roster, destination, weights=weights)
+        nodes = nodes_of(roster, destination)
     except MissingCoordinates as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
-    return loaded, [row for row, _, _ in roster]
+    return roster, destination, nodes
 
 
 @router.post(
@@ -272,6 +293,7 @@ async def create_optimization(
     response: Response,
     limiter: Limiter,
     solve_slots: SolveSlots,
+    travel: TravelProvider,
     payload: OptimizationCreate | None = None,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JobRead | JSONResponse:
@@ -292,13 +314,14 @@ async def create_optimization(
     if previous_id is not None and not weights.churn:
         weights = weights.model_copy(update={"churn": PRESERVE_CHURN_WEIGHT})
 
-    _loaded, rows = await _load(session, event, weights)
+    roster, _, _ = await _load(session, event)
     fingerprint = input_fingerprint(
         event,
-        rows,
+        [row for row, _, _ in roster],
         algorithm=request.algorithm,
         weights=weights,
         previous_solution_id=previous_id,
+        travel=travel.provider,
     )
 
     if idempotency_key is not None:
@@ -386,12 +409,16 @@ async def create_optimization(
         )
 
     await session.commit()
-    await _run(session, event, job, solve_slots)
+    await _run(session, event, job, solve_slots, travel)
     return await _read(session, job, public_id)
 
 
 async def _run(
-    session: AsyncSession, event: Event, job: OptimizationJob, solve_slots: asyncio.Semaphore
+    session: AsyncSession,
+    event: Event,
+    job: OptimizationJob,
+    solve_slots: asyncio.Semaphore,
+    travel: Travel,
 ) -> None:
     """Solve the committed job and record the outcome, success or failure.
 
@@ -402,6 +429,11 @@ async def _run(
     would stall every other request in the process, `/healthz` included -- which would turn a slow
     solve into a container restart (docs/design.md 4.2). It does not make solves parallel; it keeps
     one from blocking everything else.
+
+    Travel times are fetched here, once per solve -- one matrix request against a 500/day quota
+    (docs/design.md 4.4). When the provider cannot answer, the solve runs on straight-line estimates
+    and the job's fingerprint is re-taken for them, so the next request for this problem asks the
+    provider again instead of being handed the estimate as if it were the answer.
     """
     job_id, algorithm = job.id, job.algorithm
     weights = Weights.model_validate(job.params.get("weights") or {})
@@ -416,7 +448,18 @@ async def _run(
     await session.commit()
 
     try:
-        loaded, _ = await _load(session, event, weights)
+        roster, destination, nodes = await _load(session, event)
+        estimates = await estimates_or_fallback(travel, nodes)
+        loaded = build_instance(event, roster, destination, weights=weights, estimates=estimates)
+        if estimates.provider != travel.provider:
+            job.input_fingerprint = input_fingerprint(
+                event,
+                [row for row, _, _ in roster],
+                algorithm=algorithm,
+                weights=weights,
+                previous_solution_id=None if previous_id is None else uuid.UUID(previous_id),
+                travel=estimates.provider,
+            )
         previous = (
             await _previous_solution(session, uuid.UUID(previous_id))
             if previous_id is not None

@@ -103,6 +103,7 @@
       "gap_to_bound": null,
       "p95_detour_s": 896,
       "passenger_ride_s": 10174,
+      "travel": "haversine",
       "unassigned": 0,
       "vehicles": 4
     },

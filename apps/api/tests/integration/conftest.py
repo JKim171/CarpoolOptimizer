@@ -94,16 +94,33 @@ def _short_search(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(optimizations, "LNS_BUDGET_SECONDS", 0.1)
 
 
+class TravelSwitch:
+    """The routing provider the app solves with. Straight-line estimates unless a test swaps in
+    another, so no test ever spends the real matrix quota -- the local `.env` carries a real key."""
+
+    def __init__(self) -> None:
+        from carpool_api.adapters.travel import Haversine, Travel
+
+        self.current: Travel = Haversine()
+
+
 @pytest.fixture
-async def api_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+def travel() -> TravelSwitch:
+    return TravelSwitch()
+
+
+@pytest.fixture
+async def api_client(engine: AsyncEngine, travel: TravelSwitch) -> AsyncIterator[AsyncClient]:
     """The real app over ASGI, talking to the container.
 
     `get_session` is overridden so requests use this test's engine rather than the process-wide one
-    built from `DATABASE_URL`; nothing else about the app is substituted, so routing, dependencies,
-    validation and serialization are all the production code paths.
+    built from `DATABASE_URL`, and `get_travel` so no request reaches the routing provider. Nothing
+    else about the app is substituted, so routing, dependencies, validation and serialization are
+    all the production code paths.
     """
     from carpool_api.db import get_session
     from carpool_api.main import create_app
+    from carpool_api.routes.optimizations import get_travel
 
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -113,6 +130,7 @@ async def api_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
 
     app = create_app()
     app.dependency_overrides[get_session] = override
+    app.dependency_overrides[get_travel] = lambda: travel.current
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://carpool.test"
     ) as client:

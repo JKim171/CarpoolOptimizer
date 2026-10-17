@@ -43,6 +43,7 @@ def input_fingerprint(
     algorithm: str,
     weights: Weights,
     previous_solution_id: uuid.UUID | None = None,
+    travel: str = "haversine",
 ) -> bytes:
     """SHA-256 over a canonical rendering of the problem.
 
@@ -83,5 +84,9 @@ def input_fingerprint(
     # matches the same problem today.
     if previous_solution_id is not None:
         payload["previous_solution_id"] = str(previous_solution_id)
+    # The travel provider changes every number in the answer, so it is part of the problem. Absent
+    # for straight-line estimates, which every fingerprint taken before road times existed used.
+    if travel != "haversine":
+        payload["travel"] = travel
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode()).digest()

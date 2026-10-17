@@ -5,11 +5,14 @@ all a solver ever asks for. Persistence needs **distances** too, because `routes
 is what a results screen shows a driver. Those come from the same source and must describe the same
 roads, so they are fetched and carried together rather than derived independently.
 
-`haversine_estimates` is the provider of last resort, and Week 2's only one: straight-line distance
-inflated by a road factor. It is honest about being an estimate and it needs no network, no key and
-no quota, which is what makes the endpoints testable before the routing adapter exists. Week 4
-replaces it with openrouteservice, whose matrix response already carries both tables -- the reason
-this shape is a pair rather than a matrix.
+`OrsMatrix` is the real provider: one openrouteservice matrix request per solve, which returns both
+tables at once -- the reason this shape is a pair rather than a matrix. `haversine_estimates` is the
+provider of last resort: straight-line distance inflated by a road factor. It is honest about being
+an estimate and needs no network, no key and no quota, so it serves tests, the generated `/demo`
+event, a deployment without a key, and any solve the provider cannot answer (docs/design.md 2.4,
+4.4).
+`TravelEstimates.provider` says which one produced a given answer, because a solution built on
+estimates has to say so rather than pass for road times.
 
 Durations come from `carpool_domain.haversine_matrix` rather than being recomputed here: the solver
 and `validate` must agree to the second about what a route costs, and two implementations of the
@@ -21,7 +24,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import pairwise
+from typing import Protocol
 
+import httpx
+
+from carpool_api.config import Settings
 from carpool_domain import Location, NodeId, TravelMatrix, haversine_matrix, haversine_meters
 
 #: A plausible urban average. Deliberately not tuned: a fictional speed tuned to look accurate is
@@ -38,6 +45,8 @@ class TravelEstimates:
 
     matrix: TravelMatrix
     _distances_m: Mapping[tuple[NodeId, NodeId], int]
+    #: "ors" or "haversine". Recorded on the solution, so an answer built on estimates says so.
+    provider: str = "haversine"
 
     def distance_m(self, origin: NodeId, destination: NodeId) -> int:
         """Metres from `origin` to `destination`, mirroring `TravelMatrix.duration`'s contract:
@@ -74,3 +83,136 @@ def haversine_estimates(
             if a != b
         },
     )
+
+
+class TravelUnavailable(Exception):
+    """The provider could not answer this request. The caller falls back to estimates."""
+
+
+class Travel(Protocol):
+    """The routing seam: a provider of durations and distances for a node set."""
+
+    #: The `TravelEstimates.provider` this answers with when it succeeds.
+    provider: str
+
+    async def estimates(self, nodes: Mapping[NodeId, Location]) -> TravelEstimates: ...
+
+
+class Haversine:
+    """`haversine_estimates` behind the same seam, for a deployment with no provider key."""
+
+    provider = "haversine"
+
+    async def estimates(self, nodes: Mapping[NodeId, Location]) -> TravelEstimates:
+        return haversine_estimates(nodes)
+
+
+# api.heigit.org puts routing under its own prefix; the bare /v2/... paths 404 there.
+_MATRIX_PATH = "/openrouteservice/v2/matrix/driving-car"
+
+
+def _table(payload: dict[str, object], name: str, size: int) -> list[list[float]]:
+    """One square table out of the response, or `TravelUnavailable` if it is not one.
+
+    A `null` cell is an unroutable point -- an address the provider could not snap to a road. It is
+    refused here rather than guessed at, and the whole solve falls back to estimates: silently
+    filling one pair with a straight-line number would mix two providers in one answer that claims
+    to be road times. Naming the person instead, as an `unassigned` reason, is the better eventual
+    answer (docs/design.md 4.4); it needs the domain to route around a missing pair.
+    """
+    table = payload.get(name)
+    if not isinstance(table, list) or len(table) != size:
+        raise TravelUnavailable(f"the matrix response has no {size}x{size} {name} table")
+    rows: list[list[float]] = []
+    for row in table:
+        if not isinstance(row, list) or len(row) != size:
+            raise TravelUnavailable(f"the matrix response has a malformed {name} row")
+        if any(cell is None for cell in row):
+            raise TravelUnavailable("a point could not be routed to by road")
+        if not all(isinstance(cell, int | float) for cell in row):
+            raise TravelUnavailable(f"the matrix response has a non-numeric {name} cell")
+        rows.append([float(cell) for cell in row])
+    return rows
+
+
+def parse_matrix(payload: object, order: list[NodeId]) -> TravelEstimates:
+    """Read an ORS matrix response whose rows and columns follow `order`.
+
+    Durations arrive as float seconds and distances as float metres; both are rounded to integers
+    here, at the boundary, because the domain is integer seconds throughout (CLAUDE.md).
+    """
+    if not isinstance(payload, dict):
+        raise TravelUnavailable("the matrix response is not an object")
+    durations = _table(payload, "durations", len(order))
+    distances = _table(payload, "distances", len(order))
+    pairs = [(i, a, j, b) for i, a in enumerate(order) for j, b in enumerate(order) if a != b]
+    return TravelEstimates(
+        matrix=TravelMatrix({(a, b): round(durations[i][j]) for i, a, j, b in pairs}),
+        _distances_m={(a, b): round(distances[i][j]) for i, a, j, b in pairs},
+        provider="ors",
+    )
+
+
+class OrsMatrix:
+    """openrouteservice's matrix endpoint: every node once, both metrics, one request.
+
+    Listing every point as a location and naming no `sources` or `destinations` returns the full
+    directed square, which covers both legs -- the return reads the destination's row
+    (docs/design.md 4.4). The participant cap is sized so that square fits one request
+    (`carpool_api.limits`), so there is no tiling and no partial failure to handle.
+    """
+
+    provider = "ors"
+
+    def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
+        self._settings = settings
+        self._client = client
+
+    async def estimates(self, nodes: Mapping[NodeId, Location]) -> TravelEstimates:
+        if not self._settings.ors_api_key:
+            raise TravelUnavailable("ORS_API_KEY is not configured")
+        order = list(nodes)
+        # Longitude first. A swap raises nothing and routes every driver to the wrong hemisphere,
+        # which is why the order is pinned by a test (docs/design.md 4.4).
+        body = {
+            "locations": [[nodes[node].lng, nodes[node].lat] for node in order],
+            "metrics": ["duration", "distance"],
+        }
+        # A header rather than the `api_key` query parameter, so the key stays out of logged URLs.
+        headers = {"Authorization": self._settings.ors_api_key}
+        timeout = self._settings.ors_timeout_seconds
+        url = f"{self._settings.ors_base_url.rstrip('/')}{_MATRIX_PATH}"
+        try:
+            if self._client is not None:
+                response = await self._client.post(url, json=body, headers=headers, timeout=timeout)
+            else:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url, json=body, headers=headers)
+        except httpx.HTTPError as exc:
+            raise TravelUnavailable(f"could not reach the routing provider: {exc}") from exc
+
+        if response.status_code >= 400:
+            # 429 included: the quota is shared and daily, and estimates are the documented answer
+            # when it runs out (docs/design.md 2.4). The body is never quoted -- it can echo the
+            # request, which holds everyone's coordinates.
+            raise TravelUnavailable(f"the routing provider returned {response.status_code}")
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise TravelUnavailable("the routing provider returned a malformed response") from exc
+        return parse_matrix(payload, order)
+
+
+async def estimates_or_fallback(
+    travel: Travel, nodes: Mapping[NodeId, Location]
+) -> TravelEstimates:
+    """The provider's answer, or straight-line estimates when it has none.
+
+    A solve on estimates is a worse answer than a solve on road times, and a better one than no
+    answer an hour before practice. The result carries `provider`, so it is never mistaken for the
+    real thing -- and the caller keeps it out of fingerprint reuse, so the next solve asks again.
+    """
+    try:
+        return await travel.estimates(nodes)
+    except TravelUnavailable:
+        return haversine_estimates(nodes)
