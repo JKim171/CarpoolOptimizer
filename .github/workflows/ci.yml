@@ -16,8 +16,10 @@ jobs:
   # These steps mirror `make setup` and `make check`. The Makefile runs them out of .venv/; CI has
   # its own environment, so the commands are spelled out rather than shelling into the Makefile.
   # Actions are pinned by commit SHA, since a tag can be moved; the comment names the release.
+  # x86 jobs name the release rather than `ubuntu-latest`, so a new runner image is a change made
+  # here on purpose, not one that arrives under a moving label.
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -48,7 +50,7 @@ jobs:
   # Mirrors `make web-check`, plus a production build -- the build is the only step that catches a
   # page that typechecks but cannot render.
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/web
@@ -112,7 +114,7 @@ jobs:
   # environment, and the role's trust policy names the branch.
   deploy:
     needs: [image]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
