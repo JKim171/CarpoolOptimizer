@@ -14,8 +14,8 @@ from roster import add, optimize, other_event, person, seed_roster
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from carpool_api.adapters.travel import TravelUnavailable
-from carpool_domain import Location
+from carpool_api.adapters.travel import TravelEstimates, TravelUnavailable, haversine_estimates
+from carpool_domain import Location, NodeId
 
 
 async def solutions(client: AsyncClient, event: tuple[str, dict[str, str]]) -> list[dict[str, Any]]:
@@ -416,3 +416,67 @@ async def test_geometry_of_another_events_solution_is_not_reachable(
     await geometry(api_client, other, job["solution_id"], expect=404)
 
     assert provider.requests == []
+
+
+class RoadTimes:
+    provider = "ors"
+
+    async def estimates(self, nodes: dict[NodeId, Location]) -> TravelEstimates:
+        straight = haversine_estimates(nodes)
+        return TravelEstimates(
+            matrix=straight.matrix, _distances_m=straight._distances_m, provider="ors"
+        )
+
+
+async def read_solution(
+    client: AsyncClient, event: tuple[str, dict[str, str]], solution_id: str
+) -> dict[str, Any]:
+    public_id, headers = event
+    response = await client.get(f"/v1/events/{public_id}/solutions/{solution_id}", headers=headers)
+    assert response.status_code == 200, response.text
+    result: dict[str, Any] = response.json()
+    return result
+
+
+async def test_a_solution_on_road_times_says_so(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], travel: Any
+) -> None:
+    travel.current = RoadTimes()
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+
+    assert (await read_solution(api_client, organizer_event, job["solution_id"]))["travel"] == "ors"
+    assert (await solutions(api_client, organizer_event))[0]["travel"] == "ors"
+
+
+async def test_a_solution_on_estimates_says_so(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    """What the results screen reads to warn that every time on it is a straight-line guess."""
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+
+    body = await read_solution(api_client, organizer_event, job["solution_id"])
+
+    assert body["travel"] == "haversine"
+
+
+async def test_a_solution_from_before_road_times_reads_as_estimates(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    travel: Any,
+) -> None:
+    """Those recorded nothing, and every one of them was solved on estimates."""
+    travel.current = RoadTimes()
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("update solutions set metrics = metrics - 'travel' where id = :s"),
+            {"s": job["solution_id"]},
+        )
+
+    body = await read_solution(api_client, organizer_event, job["solution_id"])
+
+    assert body["travel"] == "haversine"

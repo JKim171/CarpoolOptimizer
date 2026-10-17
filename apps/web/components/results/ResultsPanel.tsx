@@ -63,6 +63,18 @@ export function ResultsPanel({
             </Notice>
           )}
 
+          {/* Estimates are a fallback, never a mode an organizer chose: the solve falls back to them
+              when the routing service has no answer (docs/design.md 4.4). Every time below is a
+              number someone will plan a pickup around, so it says so rather than passing for a
+              road time. The next solve asks the service again. */}
+          {solve.solution.travel === "haversine" && (
+            <Notice>
+              Times and distances here are straight-line estimates, not road times — the routing
+              service could not be reached, or an address is too far from a road to route to.
+              Re-optimize to try again.
+            </Notice>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <LegSwitch leg={solve.leg} onLeg={solve.setLeg} />
 

@@ -924,6 +924,11 @@ export interface components {
             objective_value: number;
             /** Routes */
             routes: components["schemas"]["RouteRead"][];
+            /**
+             * Travel
+             * @enum {string}
+             */
+            travel: "ors" | "haversine";
             /** Unassigned */
             unassigned: components["schemas"]["UnassignedRead"][];
         };
@@ -962,6 +967,11 @@ export interface components {
             };
             /** Objective Value */
             objective_value: number;
+            /**
+             * Travel
+             * @enum {string}
+             */
+            travel: "ors" | "haversine";
         };
         /** StopRead */
         StopRead: {

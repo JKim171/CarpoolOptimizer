@@ -1375,6 +1375,14 @@
             "title": "Routes",
             "type": "array"
           },
+          "travel": {
+            "enum": [
+              "ors",
+              "haversine"
+            ],
+            "title": "Travel",
+            "type": "string"
+          },
           "unassigned": {
             "items": {
               "$ref": "#/components/schemas/UnassignedRead"
@@ -1392,6 +1400,7 @@
           "is_active",
           "input_version",
           "is_stale",
+          "travel",
           "created_at",
           "routes",
           "unassigned"
@@ -1441,6 +1450,14 @@
           "objective_value": {
             "title": "Objective Value",
             "type": "number"
+          },
+          "travel": {
+            "enum": [
+              "ors",
+              "haversine"
+            ],
+            "title": "Travel",
+            "type": "string"
           }
         },
         "required": [
@@ -1452,6 +1469,7 @@
           "is_active",
           "input_version",
           "is_stale",
+          "travel",
           "created_at"
         ],
         "title": "SolutionSummary",

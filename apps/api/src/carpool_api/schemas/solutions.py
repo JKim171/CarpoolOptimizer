@@ -17,11 +17,21 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel
 
 from carpool_api.models import RouteLeg
+
+#: Where a solution's times and distances came from: road times from the routing provider, or
+#: straight-line estimates when it could not answer (docs/design.md 4.4).
+Travel = Literal["ors", "haversine"]
+
+
+def travel_of(metrics: dict[str, Any]) -> Travel:
+    """Read out of `metrics`, where the solve records it. A solution from before road times existed
+    recorded nothing, and every one of those was solved on estimates."""
+    return "ors" if metrics.get("travel") == "ors" else "haversine"
 
 
 class StopRead(BaseModel):
@@ -97,6 +107,10 @@ class SolutionRead(BaseModel):
     #: True when the roster has changed since: the solution still describes a real arrangement, but
     #: not the current one (docs/design.md 5.1).
     is_stale: bool
+    #: "haversine" means every time and distance in this answer is a straight-line estimate. Its own
+    #: field rather than left in `metrics`, which is untyped on the wire, because the results
+    #: screen has to say so.
+    travel: Travel
     created_at: datetime
     routes: list[RouteRead]
     unassigned: list[UnassignedRead]
@@ -114,6 +128,7 @@ class SolutionSummary(BaseModel):
     is_active: bool
     input_version: int
     is_stale: bool
+    travel: Travel
     created_at: datetime
 
     @classmethod
@@ -127,5 +142,6 @@ class SolutionSummary(BaseModel):
             is_active=solution.is_active,
             input_version=solution.input_version,
             is_stale=solution.input_version < current_version,
+            travel=travel_of(solution.metrics),
             created_at=solution.created_at,
         )

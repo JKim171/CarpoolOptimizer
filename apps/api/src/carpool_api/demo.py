@@ -30,7 +30,7 @@ from carpool_api.adapters.solutions import solution_metrics
 from carpool_api.adapters.travel import haversine_estimates
 from carpool_api.contract import serialize
 from carpool_api.models import ParticipantRole, RouteLeg
-from carpool_api.schemas.solutions import LegRead, RouteRead, SolutionRead, StopRead
+from carpool_api.schemas.solutions import LegRead, RouteRead, SolutionRead, StopRead, travel_of
 from carpool_domain import (
     DESTINATION,
     Location,
@@ -229,6 +229,7 @@ def build() -> DemoEvent:
             is_active=True,
             input_version=1,
             is_stale=False,
+            travel=travel_of(metrics),
             created_at=_moment(instance.arrival_by - 24 * 60 * 60),
             routes=routes,
             unassigned=[],

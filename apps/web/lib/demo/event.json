@@ -298,6 +298,7 @@
         "total_duration_s": 1638
       }
     ],
+    "travel": "haversine",
     "unassigned": []
   },
   "time_zone": "America/Chicago",

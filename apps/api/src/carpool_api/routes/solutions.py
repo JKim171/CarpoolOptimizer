@@ -37,6 +37,7 @@ from carpool_api.schemas.solutions import (
     SolutionSummary,
     StopRead,
     UnassignedRead,
+    travel_of,
 )
 from carpool_domain import Location
 
@@ -134,6 +135,7 @@ def _read(solution: Solution, people: dict[uuid.UUID, Participant], version: int
         is_active=solution.is_active,
         input_version=solution.input_version,
         is_stale=solution.input_version < version,
+        travel=travel_of(solution.metrics),
         created_at=solution.created_at,
         routes=[
             _route(route, people)
