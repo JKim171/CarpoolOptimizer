@@ -12,6 +12,7 @@ floats wide.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from geoalchemy2 import Geometry, WKTElement
@@ -34,3 +35,22 @@ def latitude_of(column: ColumnExpressionArgument[Any]) -> ColumnElement[float]:
 def longitude_of(column: ColumnExpressionArgument[Any]) -> ColumnElement[float]:
     """SQL expression for a point column's longitude -- the *X* ordinate."""
     return cast(func.ST_X(cast(column, Geometry)), Float)
+
+
+def line(coordinates: Sequence[tuple[float, float]]) -> WKTElement:
+    """A line for a `geometry(LINESTRING)` column, from `[lng, lat]` pairs -- already WKT's order,
+    so nothing is swapped here."""
+    return WKTElement(
+        "LINESTRING(" + ", ".join(f"{lng} {lat}" for lng, lat in coordinates) + ")", srid=SRID
+    )
+
+
+def simplified_geojson(
+    column: ColumnExpressionArgument[Any], tolerance_degrees: float
+) -> ColumnElement[str | None]:
+    """SQL expression for a line column as GeoJSON, with points closer than the tolerance merged.
+
+    Six decimal places is about 10 cm, finer than anything a map draws; the precision argument is
+    there so a coordinate does not travel as seventeen digits of float noise.
+    """
+    return func.ST_AsGeoJSON(func.ST_SimplifyPreserveTopology(column, tolerance_degrees), 6)

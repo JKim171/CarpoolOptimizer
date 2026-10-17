@@ -1196,6 +1196,57 @@
         "title": "RosterRead",
         "type": "object"
       },
+      "RouteGeometry": {
+        "description": "One car's path along the roads, both legs (docs/design.md 7.5).\n\nEach leg is `[lng, lat]` pairs in driving order, or null when the provider could not draw it --\nthe map then joins that leg's stops with straight lines, as it does before any geometry exists.",
+        "properties": {
+          "inbound": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound"
+          },
+          "outbound": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outbound"
+          },
+          "route_id": {
+            "format": "uuid",
+            "title": "Route Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "route_id",
+          "outbound",
+          "inbound"
+        ],
+        "title": "RouteGeometry",
+        "type": "object"
+      },
       "RouteLeg": {
         "enum": [
           "outbound",
@@ -1255,6 +1306,23 @@
           "inbound"
         ],
         "title": "RouteRead",
+        "type": "object"
+      },
+      "SolutionGeometry": {
+        "description": "Road lines for every car in a solution. Separate from `SolutionRead` because filling it can\ncost provider requests, and the list of cars must never wait on that.",
+        "properties": {
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteGeometry"
+            },
+            "title": "Routes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "routes"
+        ],
+        "title": "SolutionGeometry",
         "type": "object"
       },
       "SolutionRead": {
@@ -2482,6 +2550,66 @@
           }
         ],
         "summary": "Activate Solution",
+        "tags": [
+          "solutions"
+        ]
+      }
+    },
+    "/v1/events/{public_id}/solutions/{solution_id}/geometry": {
+      "get": {
+        "description": "Every car's path along the roads, fetched the first time anyone asks and stored after.\n\nLazily, because one solution costs about 30 Directions requests and the daily quota is 2,000\n(docs/design.md 4.4): fetching at solve time would spend it on answers nobody looks at. A leg\nthe provider cannot draw comes back null and is asked for again on the next view; the map draws\nit straight in the meantime.",
+        "operationId": "get_solution_geometry_v1_events__public_id__solutions__solution_id__geometry_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Solution Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The event's public handle",
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "description": "The event's public handle",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionGeometry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Solution Geometry",
         "tags": [
           "solutions"
         ]

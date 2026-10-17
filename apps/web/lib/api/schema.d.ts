@@ -300,6 +300,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/events/{public_id}/solutions/{solution_id}/geometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Solution Geometry
+         * @description Every car's path along the roads, fetched the first time anyone asks and stored after.
+         *
+         *     Lazily, because one solution costs about 30 Directions requests and the daily quota is 2,000
+         *     (docs/design.md 4.4): fetching at solve time would spend it on answers nobody looks at. A leg
+         *     the provider cannot draw comes back null and is asked for again on the next view; the map draws
+         *     it straight in the meantime.
+         */
+        get: operations["get_solution_geometry_v1_events__public_id__solutions__solution_id__geometry_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/geocode": {
         parameters: {
             query?: never;
@@ -807,6 +832,24 @@ export interface components {
             participants_version: number;
         };
         /**
+         * RouteGeometry
+         * @description One car's path along the roads, both legs (docs/design.md 7.5).
+         *
+         *     Each leg is `[lng, lat]` pairs in driving order, or null when the provider could not draw it --
+         *     the map then joins that leg's stops with straight lines, as it does before any geometry exists.
+         */
+        RouteGeometry: {
+            /** Inbound */
+            inbound: number[][] | null;
+            /** Outbound */
+            outbound: number[][] | null;
+            /**
+             * Route Id
+             * Format: uuid
+             */
+            route_id: string;
+        };
+        /**
          * RouteLeg
          * @enum {string}
          */
@@ -835,6 +878,15 @@ export interface components {
             total_distance_m: number;
             /** Total Duration S */
             total_duration_s: number;
+        };
+        /**
+         * SolutionGeometry
+         * @description Road lines for every car in a solution. Separate from `SolutionRead` because filling it can
+         *     cost provider requests, and the list of cars must never wait on that.
+         */
+        SolutionGeometry: {
+            /** Routes */
+            routes: components["schemas"]["RouteGeometry"][];
         };
         /**
          * SolutionRead
@@ -1553,6 +1605,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SolutionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_solution_geometry_v1_events__public_id__solutions__solution_id__geometry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solution_id: string;
+                /** @description The event's public handle */
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolutionGeometry"];
                 };
             };
             /** @description Validation Error */

@@ -798,6 +798,11 @@ Consequences:
   route is opened — not at solve time, because the Directions quota cannot absorb ~30 calls per
   solve (§4.4) — and persisted in `routes.outbound_geometry` / `return_geometry`, so every later
   view is a pure database read with no external calls.
+  **Built 2026-10-17** as `GET …/solutions/{id}/geometry`, separate from the solution read so the
+  list of cars never waits on the provider. The map draws straight segments until it answers, and
+  for any leg it could not draw, which stays null and is asked for again on the next view.
+  Waypoints are sent with `radiuses: -1`: Directions otherwise refuses a point more than 350 m from
+  a road, which the matrix accepts, so a long driveway would get road times and no line.
 - **Render as GeoJSON layers, not DOM markers.** Fine either way at n = 40; required for benchmark
   visualizations at n = 1000.
 - **Do not encode meaning in color alone.** Beyond ~8 drivers, categorical palettes stop being

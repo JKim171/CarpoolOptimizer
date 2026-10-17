@@ -56,6 +56,26 @@ class RouteRead(BaseModel):
     inbound: LegRead
 
 
+class RouteGeometry(BaseModel):
+    """One car's path along the roads, both legs (docs/design.md 7.5).
+
+    Each leg is `[lng, lat]` pairs in driving order, or null when the provider could not draw it --
+    the map then joins that leg's stops with straight lines, as it does before any geometry exists.
+    """
+
+    route_id: uuid.UUID
+    #: Lists rather than tuples: the generated client widens a tuple to `number[][]` regardless.
+    outbound: list[list[float]] | None
+    inbound: list[list[float]] | None
+
+
+class SolutionGeometry(BaseModel):
+    """Road lines for every car in a solution. Separate from `SolutionRead` because filling it can
+    cost provider requests, and the list of cars must never wait on that."""
+
+    routes: list[RouteGeometry]
+
+
 class UnassignedRead(BaseModel):
     participant_id: uuid.UUID
     display_name: str

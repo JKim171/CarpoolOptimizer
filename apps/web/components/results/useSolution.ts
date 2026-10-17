@@ -34,8 +34,10 @@ import {
 import { isLocated, patchParticipant, type Participant } from "@/lib/api/participants";
 import {
   activateSolution,
+  fetchGeometry,
   fetchSolution,
   legOf,
+  roadPath,
   stopNumber,
   solutionKeys,
   type LegChoice,
@@ -130,6 +132,15 @@ export function useSolution({
     enabled: solutionId !== null,
   });
 
+  // Road lines arrive after the solution, and the map draws straight lines until they do. Fetched
+  // once per solution: a solution's routes never change, and the API stores what it draws.
+  const geometry = useQuery({
+    queryKey: solutionKeys.geometry(publicId, solutionId ?? "none"),
+    queryFn: () => fetchGeometry(publicId, solutionId as string),
+    enabled: solutionId !== null,
+    staleTime: Infinity,
+  });
+
   const activate = useMutation({
     mutationFn: () => activateSolution(publicId, solutionId as string),
     onSuccess: (updated) =>
@@ -181,8 +192,9 @@ export function useSolution({
           const at = locate(stop.participant_id);
           return at ? [{ number: stopNumber(stop), label: stop.display_name, ...at }] : [];
         }),
+        road: roadPath(geometry.data, route.id, leg),
       })),
-    [routes, leg, locate],
+    [routes, leg, locate, geometry.data],
   );
 
   const unplottable = useMemo(() => {

@@ -3,14 +3,14 @@
 /**
  * The solution on a map: one coloured path per car, stops numbered in the order they are driven.
  *
- * **The lines are schematic, not driving directions.** They join consecutive stops in a straight
- * line, because route geometry is deliberately never fetched per solve -- the provider's directions
- * quota binds long before the matrix quota (docs/design.md 4.4), and a solution is re-solved far
- * more often than it is driven. The map answers "does this ordering make sense", which is a
- * question straight lines answer perfectly well: a car doubling back across town looks wrong at a
- * glance whether or not the line follows a road. Turn-by-turn is the Google Maps link per leg, one
- * request, at the moment a driver actually needs it. The caption on screen says so, because a line
- * between two points on a map otherwise reads as a road.
+ * **A leg follows the roads when its geometry has arrived, and joins its stops directly until
+ * then.** Geometry is never fetched per solve -- the provider's directions quota binds long before
+ * the matrix quota (docs/design.md 4.4) -- but the first time a solution is viewed, and stored
+ * after. The straight lines are what the map shows while that request is in flight, for a leg the
+ * provider could not draw, and on the generated `/demo` event, which has no real roads to follow.
+ * They are still a fair picture of the ordering: a car doubling back across town looks wrong at a
+ * glance either way. The caption says which kind of line is on screen, because a straight line on a
+ * map otherwise reads as a road. Turn-by-turn remains the Google Maps link per leg.
  */
 
 import { Map as MapLibreMap, Marker, NavigationControl, type GeoJSONSource } from "maplibre-gl";
@@ -35,6 +35,8 @@ export type MappedRoute = {
   /** The driver's own home. Null when it could not be located -- see `ResultsPanel`. */
   home: { lat: number; lng: number } | null;
   stops: MappedStop[];
+  /** This leg along the roads, as [lng, lat] pairs. Absent or null: join the stops directly. */
+  road?: [number, number][] | null;
 };
 
 export type Venue = { address: string; lat: number; lng: number };
@@ -70,9 +72,11 @@ function addRouteLayer(instance: MapLibreMap): void {
 
 /**
  * The path a car drives on this leg: home to each stop to the venue, or the reverse on the return.
- * Built from the same ordering the list shows, so the two cannot disagree.
+ * The road line when there is one -- the API draws it through the same stored ordering the list
+ * shows -- and otherwise straight segments built from that ordering here.
  */
 function pathOf(route: MappedRoute, venue: Venue, leg: "outbound" | "inbound"): [number, number][] {
+  if (route.road) return route.road;
   const stops: [number, number][] = route.stops.map((s) => [s.lng, s.lat]);
   const venuePoint: [number, number] = [venue.lng, venue.lat];
   const home: [number, number] | null = route.home ? [route.home.lng, route.home.lat] : null;
@@ -82,6 +86,18 @@ function pathOf(route: MappedRoute, venue: Venue, leg: "outbound" | "inbound"): 
       ? [...(home ? [home] : []), ...stops, venuePoint]
       : [venuePoint, ...stops, ...(home ? [home] : [])];
   return points;
+}
+
+/** Says which kind of line is on screen, since a straight one otherwise reads as a road. */
+function captionFor(routes: MappedRoute[]): string {
+  const onRoads = routes.filter((route) => route.road).length;
+  if (onRoads > 0 && onRoads === routes.length) {
+    return "Lines follow the roads — a car's Google Maps link has turn-by-turn directions.";
+  }
+  if (onRoads > 0) {
+    return "Lines follow the roads where directions loaded and join stops directly elsewhere — use a car's Google Maps link for turn-by-turn.";
+  }
+  return "Lines join stops directly and are not driving directions — use a car's Google Maps link for those.";
 }
 
 export function RouteMap({
@@ -257,7 +273,7 @@ export function RouteMap({
       caption={
         failed
           ? "The map could not load. Every car and stop is listed beside it in order."
-          : "Lines join stops directly and are not driving directions — use a car's Google Maps link for those."
+          : captionFor(routes)
       }
     />
   );

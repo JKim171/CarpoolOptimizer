@@ -13,6 +13,7 @@ import os
 import subprocess
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -95,13 +96,15 @@ def _short_search(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TravelSwitch:
-    """The routing provider the app solves with. Straight-line estimates unless a test swaps in
-    another, so no test ever spends the real matrix quota -- the local `.env` carries a real key."""
+    """The routing providers the app uses. Straight-line estimates and no road geometry unless a
+    test swaps one in, so no test ever spends the real quota -- the local `.env` carries a key."""
 
     def __init__(self) -> None:
         from carpool_api.adapters.travel import Haversine, Travel
 
         self.current: Travel = Haversine()
+        #: Anything with `OrsDirections.line`'s signature, or None for no provider.
+        self.directions: Any = None
 
 
 @pytest.fixture
@@ -114,13 +117,15 @@ async def api_client(engine: AsyncEngine, travel: TravelSwitch) -> AsyncIterator
     """The real app over ASGI, talking to the container.
 
     `get_session` is overridden so requests use this test's engine rather than the process-wide one
-    built from `DATABASE_URL`, and `get_travel` so no request reaches the routing provider. Nothing
+    built from `DATABASE_URL`, and `get_travel` and `get_directions` so no request reaches the
+    routing provider. Nothing
     else about the app is substituted, so routing, dependencies, validation and serialization are
     all the production code paths.
     """
     from carpool_api.db import get_session
     from carpool_api.main import create_app
     from carpool_api.routes.optimizations import get_travel
+    from carpool_api.routes.solutions import get_directions
 
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -131,6 +136,7 @@ async def api_client(engine: AsyncEngine, travel: TravelSwitch) -> AsyncIterator
     app = create_app()
     app.dependency_overrides[get_session] = override
     app.dependency_overrides[get_travel] = lambda: travel.current
+    app.dependency_overrides[get_directions] = lambda: travel.directions
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://carpool.test"
     ) as client:

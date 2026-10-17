@@ -14,6 +14,9 @@ from roster import add, optimize, other_event, person, seed_roster
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from carpool_api.adapters.travel import TravelUnavailable
+from carpool_domain import Location
+
 
 async def solutions(client: AsyncClient, event: tuple[str, dict[str, str]]) -> list[dict[str, Any]]:
     public_id, headers = event
@@ -283,3 +286,133 @@ async def test_history_is_empty_before_any_solve(
     api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
 ) -> None:
     assert await solutions(api_client, organizer_event) == []
+
+
+class StubDirections:
+    """Answers with the waypoints themselves as the line, and records every request."""
+
+    def __init__(self, *, fail_after: int | None = None) -> None:
+        self.requests: list[list[Location]] = []
+        self.fail_after = fail_after
+
+    async def line(self, stops: list[Location]) -> list[tuple[float, float]]:
+        self.requests.append(list(stops))
+        if self.fail_after is not None and len(self.requests) > self.fail_after:
+            raise TravelUnavailable("the routing provider returned 429")
+        return [(stop.lng, stop.lat) for stop in stops]
+
+
+async def geometry(
+    client: AsyncClient, event: tuple[str, dict[str, str]], solution_id: str, *, expect: int = 200
+) -> dict[str, Any]:
+    public_id, headers = event
+    response = await client.get(
+        f"/v1/events/{public_id}/solutions/{solution_id}/geometry", headers=headers
+    )
+    assert response.status_code == expect, response.text
+    result: dict[str, Any] = response.json()
+    return result
+
+
+VENUE = (-83.7430, 42.2808)
+
+
+async def test_without_a_provider_every_leg_is_left_to_straight_lines(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+
+    body = await geometry(api_client, organizer_event, job["solution_id"])
+
+    [route] = body["routes"]
+    assert route["outbound"] is None
+    assert route["inbound"] is None
+
+
+async def test_a_leg_is_drawn_home_through_each_stop_to_the_venue_and_back(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], travel: Any
+) -> None:
+    """The waypoints are the stored ordering, in driving order, longitude first."""
+    travel.directions = StubDirections()
+    public_id, headers = organizer_event
+    roster = await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+    solution = (
+        await api_client.get(
+            f"/v1/events/{public_id}/solutions/{job['solution_id']}", headers=headers
+        )
+    ).json()
+    by_id = {p["id"]: (p["pickup"]["lng"], p["pickup"]["lat"]) for p in roster.values()}
+    home = by_id[roster["driver"]["id"]]
+    outbound_stops = [
+        by_id[s["participant_id"]] for s in solution["routes"][0]["outbound"]["stops"]
+    ]
+    inbound_stops = [by_id[s["participant_id"]] for s in solution["routes"][0]["inbound"]["stops"]]
+
+    [route] = (await geometry(api_client, organizer_event, job["solution_id"]))["routes"]
+
+    assert route["route_id"] == solution["routes"][0]["id"]
+    assert [tuple(p) for p in route["outbound"]] == [home, *outbound_stops, VENUE]
+    assert [tuple(p) for p in route["inbound"]] == [VENUE, *inbound_stops, home]
+
+
+async def test_geometry_is_fetched_once_and_read_back_after(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    travel: Any,
+) -> None:
+    """The Directions quota binds long before the matrix one (docs/design.md 4.4): one request per
+    leg, the first time, and none on any view after."""
+    travel.directions = provider = StubDirections()
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+
+    first = await geometry(api_client, organizer_event, job["solution_id"])
+    second = await geometry(api_client, organizer_event, job["solution_id"])
+
+    assert len(provider.requests) == 2
+    assert second == first
+    async with engine.connect() as conn:
+        stored = (
+            await conn.execute(
+                text(
+                    "select count(*) from routes where solution_id = :s"
+                    " and outbound_geometry is not null and return_geometry is not null"
+                ),
+                {"s": job["solution_id"]},
+            )
+        ).scalar_one()
+    assert stored == 1
+
+
+async def test_a_leg_the_provider_could_not_draw_is_asked_for_again(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], travel: Any
+) -> None:
+    travel.directions = provider = StubDirections(fail_after=1)
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+
+    [partial] = (await geometry(api_client, organizer_event, job["solution_id"]))["routes"]
+    provider.fail_after = None
+    [complete] = (await geometry(api_client, organizer_event, job["solution_id"]))["routes"]
+
+    assert (partial["outbound"] is None) != (partial["inbound"] is None)
+    assert complete["outbound"] is not None
+    assert complete["inbound"] is not None
+    # One leg the first time, one failure, and only the failed leg again.
+    assert len(provider.requests) == 3
+
+
+async def test_geometry_of_another_events_solution_is_not_reachable(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], travel: Any
+) -> None:
+    travel.directions = provider = StubDirections()
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+    other = await other_event(api_client)
+
+    await geometry(api_client, other, job["solution_id"], expect=404)
+
+    assert provider.requests == []

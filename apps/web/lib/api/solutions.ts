@@ -15,6 +15,7 @@ export type Route = components["schemas"]["RouteRead"];
 export type Leg = components["schemas"]["LegRead"];
 export type Stop = components["schemas"]["StopRead"];
 export type Unassigned = components["schemas"]["UnassignedRead"];
+export type SolutionGeometry = components["schemas"]["SolutionGeometry"];
 
 /**
  * Which leg is on screen.
@@ -56,8 +57,39 @@ export async function activateSolution(publicId: string, solutionId: string): Pr
   );
 }
 
+/**
+ * Every car's path along the roads. Separate from the solution because the first request for it
+ * can make the API spend provider quota drawing the lines, and the list of cars must not wait on
+ * that. A leg comes back null when it could not be drawn; the map joins its stops directly instead.
+ */
+export async function fetchGeometry(
+  publicId: string,
+  solutionId: string,
+): Promise<SolutionGeometry> {
+  return unwrap(
+    await api.GET("/v1/events/{public_id}/solutions/{solution_id}/geometry", {
+      params: { path: { public_id: publicId, solution_id: solutionId }, header: undefined },
+      headers: organizerAuth(publicId),
+    }),
+  );
+}
+
+/** One leg's road line, or null when there is none to draw. */
+export function roadPath(
+  geometry: SolutionGeometry | undefined,
+  routeId: string,
+  choice: LegChoice,
+): [number, number][] | null {
+  const route = geometry?.routes.find((r) => r.route_id === routeId);
+  if (!route) return null;
+  const line = choice === "outbound" ? route.outbound : route.inbound;
+  return line ? line.map(([lng, lat]): [number, number] => [lng, lat]) : null;
+}
+
 export const solutionKeys = {
   detail: (publicId: string, solutionId: string) => ["solution", publicId, solutionId] as const,
+  geometry: (publicId: string, solutionId: string) =>
+    ["solution", publicId, solutionId, "geometry"] as const,
 };
 
 /**
