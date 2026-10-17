@@ -30,6 +30,7 @@ rewrite.
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -40,6 +41,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import carpool_domain
 from carpool_api.adapters.fingerprint import input_fingerprint
 from carpool_api.adapters.instance import (
     LoadedInstance,
@@ -57,7 +59,7 @@ from carpool_api.ratelimit import SOLVES, Limiter, SolveSlots
 from carpool_api.schemas.events import weights_of
 from carpool_api.schemas.optimizations import JobConflict, JobRead, OptimizationCreate
 from carpool_api.schemas.weights import Weights
-from carpool_domain import Location, greedy, validate
+from carpool_domain import Location, ProblemInstance, greedy, lns, validate
 
 router = APIRouter(prefix="/v1/events/{public_id}/optimizations", tags=["optimizations"])
 
@@ -70,6 +72,29 @@ _IN_FLIGHT_INDEX = "one_active_job_per_event"
 #: cap is seconds -- because expiring a lease early on a job that is still working would let a
 #: second solve start alongside the first.
 LEASE_SECONDS = 300
+
+#: Wall-clock budget for the search after greedy. The solve still runs inside the request, and a
+#: multi-second budget there is the trigger for splitting out a worker (docs/design.md 4.2). On
+#: generated 50-person events, five seconds landed within half a percent of one.
+LNS_BUDGET_SECONDS = 1.0
+
+#: A cap the clock reaches first on any real event; it only bounds a trivially small one, where
+#: iterations are so cheap the second would be spent re-finding the same answer.
+LNS_MAX_ITERATIONS = 20_000
+
+
+def _solve(instance: ProblemInstance, algorithm: str) -> carpool_domain.Solution:
+    """Run the named algorithm. Called in a worker thread, so it may block."""
+    start = greedy.solve(instance)
+    if algorithm != "lns":
+        return start
+    began = time.monotonic()
+    return lns.solve(
+        instance,
+        initial=start,
+        iterations=LNS_MAX_ITERATIONS,
+        progress=lambda: (time.monotonic() - began) / LNS_BUDGET_SECONDS,
+    )
 
 
 async def _reclaim_expired_leases(session: AsyncSession, event_id: uuid.UUID) -> None:
@@ -311,7 +336,7 @@ async def _run(
     solve into a container restart (docs/design.md 4.2). It does not make solves parallel; it keeps
     one from blocking everything else.
     """
-    job_id = job.id
+    job_id, algorithm = job.id, job.algorithm
     weights = Weights.model_validate(job.params.get("weights") or {})
 
     job.status = JobStatus.RUNNING
@@ -327,7 +352,7 @@ async def _run(
         # Only the solve itself holds a slot; loading and writing are I/O and do not compete for
         # the two cores the slots stand for.
         async with solve_slots:
-            solution = await asyncio.to_thread(greedy.solve, loaded.instance)
+            solution = await asyncio.to_thread(_solve, loaded.instance, algorithm)
         violations = validate(loaded.instance, solution)
         if violations:
             # A solver may be heuristic about quality and never about feasibility (CLAUDE.md), so an

@@ -48,12 +48,27 @@ def test_the_same_seed_gives_the_same_answer():
     )
 
 
-def test_a_search_stopped_at_once_returns_its_starting_point():
+def test_a_spent_budget_returns_the_starting_point():
     instance = generate_instance(n=30, seed=5)
     start = greedy.solve(instance)
-    stopped = lns.solve(instance, initial=start, should_stop=lambda: True)
+    stopped = lns.solve(instance, initial=start, progress=lambda: 1.0)
 
     assert evaluate(instance, stopped).total == evaluate(instance, start).total
+
+
+def test_progress_ends_the_search_before_the_iteration_cap():
+    instance = generate_instance(n=30, seed=5)
+    calls = 0
+
+    def progress() -> float:
+        nonlocal calls
+        calls += 1
+        return calls / 50
+
+    solution = lns.solve(instance, iterations=10_000, progress=progress)
+
+    assert calls == 50
+    assert validate(instance, solution) == []
 
 
 def test_pins_survive_the_search():

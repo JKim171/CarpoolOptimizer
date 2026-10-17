@@ -37,7 +37,7 @@ async def test_a_solution_reads_back_with_both_legs_and_names(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["algorithm"] == "greedy"
+    assert body["algorithm"] == "lns"
     assert body["is_active"] is False
     assert body["is_stale"] is False
     assert len(body["routes"]) == 1

@@ -11,14 +11,14 @@ from pydantic import BaseModel, ConfigDict
 from carpool_api.models import JobStatus, OptimizationJob
 from carpool_api.schemas.weights import Weights
 
-#: The only algorithm a user request may ask for.
+#: The algorithms a user request may ask for. `lns` is greedy followed by a time-boxed search from
+#: its answer, so it is never worse; `greedy` alone stays available as the fast, deterministic path.
 #:
 #: CP-SAT is deliberately absent: it is a measuring instrument, not a product feature. It costs
 #: ~400 MB per solve on a 2 GB host, its runtime varies wildly, and the 50-participant cap sits past
 #: the ~40 where it reliably proves optimality -- so it runs in the benchmark harness and never on a
 #: user request, which is also what keeps OR-Tools out of the production image (docs/design.md 8.3).
-#: LNS joins this list in Week 4.
-Algorithm = Literal["greedy"]
+Algorithm = Literal["greedy", "lns"]
 
 
 class OptimizationCreate(BaseModel):
@@ -26,13 +26,14 @@ class OptimizationCreate(BaseModel):
 
     No `preserve_previous` yet, though docs/design.md 6 lists one: it would set the churn weight
     against the previously activated solution, and greedy cannot steer by churn: it constructs
-    from nothing. The flag arrives with LNS, whose acceptance criterion can actually honour it
-    (docs/design.md 8.4). Offering it now would be a switch that silently does nothing.
+    from nothing. LNS could honour it through its acceptance criterion (docs/design.md 8.4), but
+    the search does not price churn yet, so offering the flag would still be a switch that
+    silently does nothing.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    algorithm: Algorithm = "greedy"
+    algorithm: Algorithm = "lns"
     #: Overrides `events.settings` for this job only. The effective set is recorded in
     #: `optimization_jobs.params`, so the job stays reproducible after the event's settings change.
     weights: Weights | None = None

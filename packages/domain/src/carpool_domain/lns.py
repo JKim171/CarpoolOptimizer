@@ -11,9 +11,11 @@ because exchanging two riders between two *full* cars is the one change insertio
 removing either rider first frees the very seat the other needs.
 
 The budget is a number of iterations rather than seconds, because this package reads no clock
-(docs/design.md 4.1). A caller that wants a wall-clock limit passes `should_stop`, consulted once
-per iteration. Cooling still follows the iteration count, so a search stopped early ends warm --
-which costs some quality, never feasibility. Every accepted state is feasible route by route, and
+(docs/design.md 4.1). A caller that wants a wall-clock budget passes `progress`, a function from
+nothing to the fraction of the budget spent, consulted once per iteration: cooling follows it, and
+the search stops when it reaches 1. Driving the temperature from the same fraction that ends the
+search is what lets a timed search cool fully; stopping on the clock while cooling by iteration
+count would end every short search still hot. Every accepted state is feasible route by route, and
 the answer returned is the best one seen, so it is never worse than the starting solution.
 """
 
@@ -276,13 +278,15 @@ def solve(
     initial: Solution | None = None,
     iterations: int = DEFAULT_ITERATIONS,
     seed: int = 0,
-    should_stop: Callable[[], bool] | None = None,
+    progress: Callable[[], float] | None = None,
     candidate_drivers: int = greedy.DEFAULT_CANDIDATE_DRIVERS,
 ) -> Solution:
     """Improve on `initial` (greedy's answer by default) for up to `iterations` moves.
 
     `initial` must be feasible; it is the floor on quality, since the best solution seen is what
-    comes back. The same instance, initial solution and seed always give the same answer.
+    comes back. Without `progress`, the same instance, initial solution and seed always give the
+    same answer; with it, how far the search gets depends on how fast the machine is. `iterations`
+    stays a cap either way.
     """
     start = initial if initial is not None else greedy.solve(instance)
     rng = random.Random(seed)
@@ -300,9 +304,10 @@ def solve(
     start_temperature = max(1.0, START_WORSE_FRACTION * driving / math.log(2))
 
     for iteration in range(iterations):
-        if should_stop is not None and should_stop():
+        spent = progress() if progress is not None else iteration / iterations
+        if spent >= 1.0:
             break
-        temperature = start_temperature * END_TEMPERATURE_RATIO ** (iteration / iterations)
+        temperature = start_temperature * END_TEMPERATURE_RATIO ** max(0.0, spent)
 
         candidate = current.copy()
         before = dict(candidate.routes)

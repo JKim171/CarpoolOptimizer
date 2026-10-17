@@ -45,7 +45,7 @@ export async function startOptimization(publicId: string): Promise<StartResult> 
   const result = await api.POST("/v1/events/{public_id}/optimizations", {
     params: { path: { public_id: publicId }, header: undefined },
     headers: organizerAuth(publicId),
-    body: { algorithm: "greedy" },
+    body: { algorithm: "lns" },
   });
 
   if (result.response.status === 409) {

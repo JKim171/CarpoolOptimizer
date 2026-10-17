@@ -564,16 +564,17 @@ export interface components {
          *
          *     No `preserve_previous` yet, though docs/design.md 6 lists one: it would set the churn weight
          *     against the previously activated solution, and greedy cannot steer by churn: it constructs
-         *     from nothing. The flag arrives with LNS, whose acceptance criterion can actually honour it
-         *     (docs/design.md 8.4). Offering it now would be a switch that silently does nothing.
+         *     from nothing. LNS could honour it through its acceptance criterion (docs/design.md 8.4), but
+         *     the search does not price churn yet, so offering the flag would still be a switch that
+         *     silently does nothing.
          */
         OptimizationCreate: {
             /**
              * Algorithm
-             * @default greedy
-             * @constant
+             * @default lns
+             * @enum {string}
              */
-            algorithm: "greedy";
+            algorithm: "greedy" | "lns";
             weights?: components["schemas"]["Weights"] | null;
         };
         /** ParticipantCreate */

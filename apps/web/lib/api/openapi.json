@@ -486,11 +486,14 @@
       },
       "OptimizationCreate": {
         "additionalProperties": false,
-        "description": "What to solve and how.\n\nNo `preserve_previous` yet, though docs/design.md 6 lists one: it would set the churn weight\nagainst the previously activated solution, and greedy cannot steer by churn: it constructs\nfrom nothing. The flag arrives with LNS, whose acceptance criterion can actually honour it\n(docs/design.md 8.4). Offering it now would be a switch that silently does nothing.",
+        "description": "What to solve and how.\n\nNo `preserve_previous` yet, though docs/design.md 6 lists one: it would set the churn weight\nagainst the previously activated solution, and greedy cannot steer by churn: it constructs\nfrom nothing. LNS could honour it through its acceptance criterion (docs/design.md 8.4), but\nthe search does not price churn yet, so offering the flag would still be a switch that\nsilently does nothing.",
         "properties": {
           "algorithm": {
-            "const": "greedy",
-            "default": "greedy",
+            "default": "lns",
+            "enum": [
+              "greedy",
+              "lns"
+            ],
             "title": "Algorithm",
             "type": "string"
           },

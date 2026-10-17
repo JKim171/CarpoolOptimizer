@@ -83,6 +83,17 @@ async def engine(migrated_url: str) -> AsyncIterator[AsyncEngine]:
         await engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _short_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A tenth of the production search budget, so each solve here is not a second of waiting.
+
+    The search runs either way; only how long it may look is changed.
+    """
+    from carpool_api.routes import optimizations
+
+    monkeypatch.setattr(optimizations, "LNS_BUDGET_SECONDS", 0.1)
+
+
 @pytest.fixture
 async def api_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
     """The real app over ASGI, talking to the container.

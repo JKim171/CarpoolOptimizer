@@ -25,7 +25,7 @@ async def test_optimizing_an_event_succeeds_inline(
     job = await optimize(api_client, organizer_event)
 
     assert job["status"] == "succeeded"
-    assert job["algorithm"] == "greedy"
+    assert job["algorithm"] == "lns"
     assert job["solution_id"] is not None
     assert job["error"] is None
     assert job["input_version"] == 4
@@ -234,6 +234,17 @@ async def test_optimizing_requires_the_organizer_token(
     response = await api_client.post(f"/v1/events/{public_id}/optimizations", json={})
 
     assert response.status_code == 401
+
+
+async def test_greedy_alone_can_still_be_asked_for(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    await seed_roster(api_client, organizer_event)
+
+    job = await optimize(api_client, organizer_event, json={"algorithm": "greedy"})
+
+    assert job["status"] == "succeeded"
+    assert job["algorithm"] == "greedy"
 
 
 async def test_an_unknown_algorithm_is_rejected(
