@@ -17,6 +17,13 @@ the search stops when it reaches 1. Driving the temperature from the same fracti
 search is what lets a timed search cool fully; stopping on the clock while cooling by iteration
 count would end every short search still hot. Every accepted state is feasible route by route, and
 the answer returned is the best one seen, so it is never worse than the starting solution.
+
+Re-optimization passes `previous`, the solution people have already made plans around
+(docs/design.md 8.4). Its churn -- riders whose driver changed -- is then part of the price of
+every state, and a rebuild seating a rider charges it too, so the search leans toward each rider's
+old car rather than only rejecting moves away from it after the fact. The search also starts from
+`previous` itself, repaired for whoever joined, left or changed since, unless greedy's fresh
+answer is cheaper even with the churn counted.
 """
 
 from __future__ import annotations
@@ -75,10 +82,23 @@ def _without(route: Route, rider: str) -> Route:
 
 
 class _Search:
-    def __init__(self, instance: ProblemInstance, rng: random.Random, candidates: int) -> None:
+    def __init__(
+        self,
+        instance: ProblemInstance,
+        rng: random.Random,
+        candidates: int,
+        previous: Solution | None = None,
+    ) -> None:
         self.instance = instance
         self.rng = rng
         self.candidates = candidates
+        #: Each previously seated rider's driver -- what churn is counted against, as in
+        #: `objective.churn`. Empty when churn is not priced, which makes every check below free.
+        self.previous_driver: dict[str, str] = (
+            {p: r.driver_id for r in previous.routes for p in r.passengers}
+            if previous is not None and instance.weights.churn
+            else {}
+        )
         self._costs: dict[Route, float] = {}
         self._sequenced: dict[Route, Route] = {}
 
@@ -114,7 +134,23 @@ class _Search:
             + weights.vehicle * len(state.routes)
             + weights.unassigned
             * sum(1 + self.instance.participant(p).priority for p in state.unassigned)
+            + weights.churn * self.churn(state)
         )
+
+    def churn(self, state: _State) -> int:
+        if not self.previous_driver:
+            return 0
+        return sum(
+            1
+            for driver, route in state.routes.items()
+            for rider in route.passengers
+            if self.previous_driver.get(rider, driver) != driver
+        )
+
+    def moved(self, rider: str, driver: str) -> float:
+        """The churn charge for seating `rider` with `driver`."""
+        before = self.previous_driver.get(rider)
+        return self.instance.weights.churn if before is not None and before != driver else 0.0
 
     def tidy(self, route: Route) -> Route:
         """`route` optimally ordered, or as it was when the optimal order breaks a detour cap."""
@@ -232,8 +268,10 @@ class _Search:
                 continue
             seen += 1
             insertion = greedy.best_insertion(instance, route, rider, cost=self.route_cost)
-            if insertion is not None and (best is None or insertion[1] < best[2]):
-                best = (driver, insertion[0], insertion[1])
+            if insertion is not None:
+                price = insertion[1] + self.moved(rider, driver)
+                if best is None or price < best[2]:
+                    best = (driver, insertion[0], price)
             if seen >= self.candidates:
                 break
 
@@ -248,6 +286,56 @@ class _Search:
             state.unassigned.add(rider)
         else:
             state.routes[best[0]] = best[1]
+
+    def warm_start(self, previous: Solution) -> _State:
+        """`previous`, repaired to fit this instance, with everyone else seated by `recreate`.
+
+        A car survives when its driver can still drive, keeping the riders who are still here, still
+        riding on that leg, and not pinned to someone else. A car that no longer passes on its own
+        -- a seat count dropped, a time window moved -- is emptied and its riders rebuilt with the
+        rest, which keeps every car in the starting state feasible.
+        """
+        instance = self.instance
+        drivers = {r.driver_id for r in previous.routes if instance.has(r.driver_id)}
+        drivers = {d for d in drivers if instance.participant(d).role.can_drive}
+        drivers |= {p.id for p in instance.participants if p.role is Role.DRIVER}
+
+        def stays(rider: str, driver: str, *, outbound: bool) -> bool:
+            if rider in drivers or not instance.has(rider):
+                return False
+            person = instance.participant(rider)
+            needed = person.needs_outbound if outbound else person.needs_return
+            return (
+                person.role is not Role.DRIVER
+                and needed
+                and person.pinned_driver_id in (None, driver)
+            )
+
+        state = _State({d: Route(d) for d in drivers}, set())
+        for route in previous.routes:
+            driver = route.driver_id
+            if driver not in drivers:
+                continue
+            kept = Route(
+                driver,
+                tuple(p for p in route.outbound if stays(p, driver, outbound=True)),
+                tuple(p for p in route.inbound if stays(p, driver, outbound=False)),
+            )
+            tidied = self.tidy(kept)
+            if route_feasible(instance, tidied):
+                state.routes[driver] = tidied
+
+        seated = {p for route in state.routes.values() for p in route.passengers}
+        pending = {
+            p.id
+            for p in instance.participants
+            if p.role is not Role.DRIVER
+            and (p.needs_outbound or p.needs_return)
+            and p.id not in drivers
+            and p.id not in seated
+        }
+        self.recreate(state, pending)
+        return state
 
     def swap(self, state: _State) -> set[str] | None:
         """Exchange two riders between two cars in place, returning the drivers touched."""
@@ -280,26 +368,38 @@ def solve(
     seed: int = 0,
     progress: Callable[[], float] | None = None,
     candidate_drivers: int = greedy.DEFAULT_CANDIDATE_DRIVERS,
+    previous: Solution | None = None,
 ) -> Solution:
     """Improve on `initial` (greedy's answer by default) for up to `iterations` moves.
 
     `initial` must be feasible; it is the floor on quality, since the best solution seen is what
-    comes back. Without `progress`, the same instance, initial solution and seed always give the
+    comes back. `previous` prices churn against an earlier solution, at `weights.churn`; without an
+    `initial`, the search then starts from whichever of the repaired `previous` and greedy's answer
+    costs less. Without `progress`, the same instance, initial solution and seed always give the
     same answer; with it, how far the search gets depends on how fast the machine is. `iterations`
     stays a cap either way.
     """
-    start = initial if initial is not None else greedy.solve(instance)
     rng = random.Random(seed)
-    search = _Search(instance, rng, candidate_drivers)
+    search = _Search(instance, rng, candidate_drivers, previous)
 
+    start = initial if initial is not None else greedy.solve(instance)
     current = _State({r.driver_id: r for r in start.routes}, set(start.unassigned))
     current_cost = search.total(current)
+    if previous is not None and initial is None:
+        warm = search.warm_start(previous)
+        if all(route_feasible(instance, r) for r in warm.routes.values()):
+            warm_cost = search.total(warm)
+            if warm_cost < current_cost:
+                current, current_cost = warm, warm_cost
     best, best_cost = current.copy(), current_cost
 
     # Temperature is scaled to the cost of driving, not to the unassigned penalty: one stranded
     # rider outweighs any amount of driving, and a temperature that large would accept anything.
-    driving = current_cost - instance.weights.unassigned * sum(
-        1 + instance.participant(p).priority for p in current.unassigned
+    driving = (
+        current_cost
+        - instance.weights.unassigned
+        * sum(1 + instance.participant(p).priority for p in current.unassigned)
+        - instance.weights.churn * search.churn(current)
     )
     start_temperature = max(1.0, START_WORSE_FRACTION * driving / math.log(2))
 

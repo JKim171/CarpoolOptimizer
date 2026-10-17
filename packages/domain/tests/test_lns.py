@@ -90,3 +90,91 @@ def test_pins_survive_the_search():
 
     assert validate(pinned, solution) == []
     assert solution.driver_of(rider.id) == driver.id
+
+
+# -- re-optimization against a previous solution (docs/design.md 8.4) ------------------------------
+
+
+def _with_churn(instance, weight=300.0):
+    return replace(instance, weights=replace(instance.weights, churn=weight))
+
+
+def _without_people(instance, *gone):
+    return replace(
+        instance, participants=tuple(p for p in instance.participants if p.id not in gone)
+    )
+
+
+@slow
+@given(instances, st.integers(min_value=0, max_value=1000), st.data())
+def test_re_optimizing_after_the_roster_changes_stays_feasible(instance, seed, data):
+    previous = greedy.solve(instance)
+    leaving = data.draw(st.sets(st.sampled_from([p.id for p in instance.participants]), max_size=3))
+    changed = _with_churn(_without_people(instance, *leaving))
+    if not changed.participants:
+        return
+
+    assert validate(changed, lns.solve(changed, iterations=60, seed=seed, previous=previous)) == []
+
+
+@slow
+@given(instances)
+def test_re_optimizing_is_never_worse_than_a_fresh_greedy_answer_with_churn_counted(instance):
+    previous = lns.solve(instance, iterations=60, seed=1)
+    changed = _with_churn(instance)
+    fresh = greedy.solve(changed)
+    again = lns.solve(changed, iterations=60, previous=previous)
+
+    assert (
+        evaluate(changed, again, previous=previous).total
+        <= evaluate(changed, fresh, previous=previous).total
+    )
+
+
+def test_someone_leaving_moves_nobody_else_when_churn_is_dear():
+    instance = generate_instance(n=40, seed=3, distribution=Distribution.CLUSTERED)
+    previous = lns.solve(instance, iterations=300)
+    rider = next(r for route in previous.routes for r in sorted(route.passengers))
+    changed = _with_churn(_without_people(instance, rider), weight=10_000.0)
+
+    again = lns.solve(changed, iterations=300, previous=previous)
+
+    assert validate(changed, again) == []
+    assert evaluate(changed, again, previous=previous).churn == 0
+
+
+def test_churn_pricing_keeps_more_riders_in_their_cars_than_a_fresh_search():
+    instance = generate_instance(n=50, seed=2, distribution=Distribution.UNIFORM)
+    previous = greedy.solve(instance)
+    leaving = sorted(p.id for p in instance.participants if not p.role.can_drive)[:3]
+    changed = _with_churn(_without_people(instance, *leaving))
+
+    fresh = lns.solve(changed, iterations=300)
+    kept = lns.solve(changed, iterations=300, previous=previous)
+
+    assert (
+        evaluate(changed, kept, previous=previous).churn
+        < evaluate(changed, fresh, previous=previous).churn
+    )
+
+
+def test_without_a_churn_weight_previous_changes_nothing():
+    instance = generate_instance(n=30, seed=5)
+    previous = greedy.solve(_without_people(instance, instance.participants[-1].id))
+
+    assert lns.solve(
+        instance, iterations=200, previous=previous, initial=greedy.solve(instance)
+    ) == (lns.solve(instance, iterations=200, initial=greedy.solve(instance)))
+
+
+def test_the_search_starts_from_the_previous_answer_not_from_greedy():
+    instance = generate_instance(n=40, seed=3, distribution=Distribution.CLUSTERED)
+    previous = lns.solve(instance, iterations=500)
+    changed = _with_churn(instance)
+    assert evaluate(changed, greedy.solve(changed), previous=previous).churn > 0
+
+    # No moves at all, so what comes back is the starting point.
+    start = lns.solve(changed, progress=lambda: 1.0, previous=previous)
+
+    assert evaluate(changed, start, previous=previous).churn == 0
+    assert validate(changed, start) == []
