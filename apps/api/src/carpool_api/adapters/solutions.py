@@ -58,14 +58,16 @@ def _percentile(values: list[int], fraction: float) -> int:
     return ordered[index]
 
 
-def solution_metrics(loaded: LoadedInstance, solution: Solution) -> tuple[float, dict[str, Any]]:
+def solution_metrics(
+    loaded: LoadedInstance, solution: Solution, *, previous: Solution | None = None
+) -> tuple[float, dict[str, Any]]:
     """The objective value and the `metrics` payload (docs/design.md 5).
 
     `gap_to_bound` is null rather than zero: no lower bound is computed in v1, and a zero would read
     as "proven optimal", which greedy has no right to claim. CP-SAT fills it in the benchmark
     harness, never on a user request (docs/design.md 8.3).
     """
-    breakdown = evaluate(loaded.instance, solution)
+    breakdown = evaluate(loaded.instance, solution, previous=previous)
     detours = [route_metrics(loaded.instance, route).detour_seconds for route in solution.routes]
     metrics = {
         "drive_s": breakdown.drive_seconds,
@@ -85,6 +87,8 @@ def build_solution_rows(
     job: models.OptimizationJob,
     loaded: LoadedInstance,
     solution: Solution,
+    *,
+    previous: Solution | None = None,
 ) -> models.Solution:
     """The full object graph for one solved job, ready to `session.add`.
 
@@ -92,7 +96,7 @@ def build_solution_rows(
     its unassigned rows commit together -- a half-written solution is worse than none, and
     `one_active_solution_per_event` assumes a row is complete the moment it is visible.
     """
-    objective_value, metrics = solution_metrics(loaded, solution)
+    objective_value, metrics = solution_metrics(loaded, solution, previous=previous)
 
     record = models.Solution(
         event_id=event.id,

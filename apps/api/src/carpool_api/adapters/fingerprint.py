@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
@@ -41,6 +42,7 @@ def input_fingerprint(
     *,
     algorithm: str,
     weights: Weights,
+    previous_solution_id: uuid.UUID | None = None,
 ) -> bytes:
     """SHA-256 over a canonical rendering of the problem.
 
@@ -77,5 +79,9 @@ def input_fingerprint(
             key=lambda entry: str(entry["id"]),
         ),
     }
+    # Only when there is one, so every fingerprint taken before re-optimization existed still
+    # matches the same problem today.
+    if previous_solution_id is not None:
+        payload["previous_solution_id"] = str(previous_solution_id)
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode()).digest()

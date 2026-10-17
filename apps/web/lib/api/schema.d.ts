@@ -562,11 +562,11 @@ export interface components {
          * OptimizationCreate
          * @description What to solve and how.
          *
-         *     No `preserve_previous` yet, though docs/design.md 6 lists one: it would set the churn weight
-         *     against the previously activated solution, and greedy cannot steer by churn: it constructs
-         *     from nothing. LNS could honour it through its acceptance criterion (docs/design.md 8.4), but
-         *     the search does not price churn yet, so offering the flag would still be a switch that
-         *     silently does nothing.
+         *     `preserve_previous` re-optimizes against the event's active solution: riders whose driver
+         *     changes from it are charged as churn (docs/design.md 8.4), and the search starts from that
+         *     solution rather than from scratch. With no active solution it is an ordinary solve. It needs
+         *     `lns`, since greedy constructs from nothing and has no way to keep anyone where they were;
+         *     asking greedy for it is refused rather than silently ignored.
          */
         OptimizationCreate: {
             /**
@@ -575,6 +575,11 @@ export interface components {
              * @enum {string}
              */
             algorithm: "greedy" | "lns";
+            /**
+             * Preserve Previous
+             * @default false
+             */
+            preserve_previous: boolean;
             weights?: components["schemas"]["Weights"] | null;
         };
         /** ParticipantCreate */

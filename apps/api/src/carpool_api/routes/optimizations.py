@@ -40,6 +40,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 import carpool_domain
 from carpool_api.adapters.fingerprint import input_fingerprint
@@ -54,12 +55,20 @@ from carpool_api.auth import OrganizerEvent
 from carpool_api.db import get_session
 from carpool_api.errors import violates
 from carpool_api.geo import latitude_of, longitude_of
-from carpool_api.models import Event, JobStatus, OptimizationJob, Participant, Solution
+from carpool_api.models import (
+    Event,
+    JobStatus,
+    OptimizationJob,
+    Participant,
+    RouteLeg,
+    Solution,
+)
+from carpool_api.models import Route as RouteRow
 from carpool_api.ratelimit import SOLVES, Limiter, SolveSlots
 from carpool_api.schemas.events import weights_of
 from carpool_api.schemas.optimizations import JobConflict, JobRead, OptimizationCreate
 from carpool_api.schemas.weights import Weights
-from carpool_domain import Location, ProblemInstance, greedy, lns, validate
+from carpool_domain import Location, ProblemInstance, Route, greedy, lns, validate
 
 router = APIRouter(prefix="/v1/events/{public_id}/optimizations", tags=["optimizations"])
 
@@ -82,19 +91,62 @@ LNS_BUDGET_SECONDS = 1.0
 #: iterations are so cheap the second would be spent re-finding the same answer.
 LNS_MAX_ITERATIONS = 20_000
 
+#: The churn weight a `preserve_previous` solve runs with when the request sets none: moving one
+#: rider to a different car costs as much as five minutes of extra driving.
+PRESERVE_CHURN_WEIGHT = 300.0
 
-def _solve(instance: ProblemInstance, algorithm: str) -> carpool_domain.Solution:
+
+def _solve(
+    instance: ProblemInstance, algorithm: str, previous: carpool_domain.Solution | None = None
+) -> carpool_domain.Solution:
     """Run the named algorithm. Called in a worker thread, so it may block."""
-    start = greedy.solve(instance)
     if algorithm != "lns":
-        return start
+        return greedy.solve(instance)
+    # Started before greedy, so the budget covers the whole solve. With a previous solution, LNS
+    # runs greedy itself and starts from whichever of the two is cheaper.
     began = time.monotonic()
     return lns.solve(
         instance,
-        initial=start,
+        initial=None if previous is not None else greedy.solve(instance),
         iterations=LNS_MAX_ITERATIONS,
         progress=lambda: (time.monotonic() - began) / LNS_BUDGET_SECONDS,
+        previous=previous,
     )
+
+
+async def _active_solution_id(session: AsyncSession, event_id: uuid.UUID) -> uuid.UUID | None:
+    found = await session.execute(
+        select(Solution.id).where(Solution.event_id == event_id, Solution.is_active)
+    )
+    return found.scalars().first()
+
+
+async def _previous_solution(
+    session: AsyncSession, solution_id: uuid.UUID
+) -> carpool_domain.Solution | None:
+    """A stored solution as the domain sees it: who drives whom, in what order.
+
+    People who have since left are kept; the search repairs the solution for the current roster,
+    and churn is only ever counted over people present in both.
+    """
+    found = await session.execute(
+        select(RouteRow)
+        .where(RouteRow.solution_id == solution_id)
+        .options(selectinload(RouteRow.stops))
+    )
+    routes = []
+    for row in found.scalars():
+
+        def leg(kind: RouteLeg, row: RouteRow = row) -> tuple[str, ...]:
+            stops = sorted((s for s in row.stops if s.leg is kind), key=lambda s: s.seq)
+            return tuple(str(s.participant_id) for s in stops)
+
+        routes.append(
+            Route(str(row.driver_participant_id), leg(RouteLeg.OUTBOUND), leg(RouteLeg.RETURN))
+        )
+    if not routes:
+        return None
+    return carpool_domain.Solution(routes=tuple(sorted(routes, key=lambda r: r.driver_id)))
 
 
 async def _reclaim_expired_leases(session: AsyncSession, event_id: uuid.UUID) -> None:
@@ -234,8 +286,20 @@ async def create_optimization(
     event_id, public_id = event.id, event.public_id
     input_version = event.participants_version
 
+    previous_id = (
+        await _active_solution_id(session, event_id) if request.preserve_previous else None
+    )
+    if previous_id is not None and not weights.churn:
+        weights = weights.model_copy(update={"churn": PRESERVE_CHURN_WEIGHT})
+
     _loaded, rows = await _load(session, event, weights)
-    fingerprint = input_fingerprint(event, rows, algorithm=request.algorithm, weights=weights)
+    fingerprint = input_fingerprint(
+        event,
+        rows,
+        algorithm=request.algorithm,
+        weights=weights,
+        previous_solution_id=previous_id,
+    )
 
     if idempotency_key is not None:
         replayed = await session.execute(
@@ -264,7 +328,10 @@ async def create_optimization(
         event_id=event_id,
         status=JobStatus.QUEUED,
         algorithm=request.algorithm,
-        params={"weights": weights.model_dump()},
+        params={
+            "weights": weights.model_dump(),
+            **({"previous_solution_id": str(previous_id)} if previous_id is not None else {}),
+        },
         input_fingerprint=fingerprint,
         input_version=input_version,
         idempotency_key=idempotency_key,
@@ -338,6 +405,7 @@ async def _run(
     """
     job_id, algorithm = job.id, job.algorithm
     weights = Weights.model_validate(job.params.get("weights") or {})
+    previous_id = job.params.get("previous_solution_id")
 
     job.status = JobStatus.RUNNING
     job.started_at = datetime.now(UTC)
@@ -349,10 +417,15 @@ async def _run(
 
     try:
         loaded, _ = await _load(session, event, weights)
+        previous = (
+            await _previous_solution(session, uuid.UUID(previous_id))
+            if previous_id is not None
+            else None
+        )
         # Only the solve itself holds a slot; loading and writing are I/O and do not compete for
         # the two cores the slots stand for.
         async with solve_slots:
-            solution = await asyncio.to_thread(_solve, loaded.instance, algorithm)
+            solution = await asyncio.to_thread(_solve, loaded.instance, algorithm, previous)
         violations = validate(loaded.instance, solution)
         if violations:
             # A solver may be heuristic about quality and never about feasibility (CLAUDE.md), so an
@@ -361,7 +434,7 @@ async def _run(
                 "solver produced an infeasible solution: "
                 + "; ".join(f"{v.code}({v.participant_id or v.driver_id})" for v in violations)
             )
-        session.add(build_solution_rows(event, job, loaded, solution))
+        session.add(build_solution_rows(event, job, loaded, solution, previous=previous))
         job.status = JobStatus.SUCCEEDED
         job.finished_at = datetime.now(UTC)
         await session.commit()

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from carpool_api.models import JobStatus, OptimizationJob
 from carpool_api.schemas.weights import Weights
@@ -24,11 +24,11 @@ Algorithm = Literal["greedy", "lns"]
 class OptimizationCreate(BaseModel):
     """What to solve and how.
 
-    No `preserve_previous` yet, though docs/design.md 6 lists one: it would set the churn weight
-    against the previously activated solution, and greedy cannot steer by churn: it constructs
-    from nothing. LNS could honour it through its acceptance criterion (docs/design.md 8.4), but
-    the search does not price churn yet, so offering the flag would still be a switch that
-    silently does nothing.
+    `preserve_previous` re-optimizes against the event's active solution: riders whose driver
+    changes from it are charged as churn (docs/design.md 8.4), and the search starts from that
+    solution rather than from scratch. With no active solution it is an ordinary solve. It needs
+    `lns`, since greedy constructs from nothing and has no way to keep anyone where they were;
+    asking greedy for it is refused rather than silently ignored.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -37,6 +37,13 @@ class OptimizationCreate(BaseModel):
     #: Overrides `events.settings` for this job only. The effective set is recorded in
     #: `optimization_jobs.params`, so the job stays reproducible after the event's settings change.
     weights: Weights | None = None
+    preserve_previous: bool = False
+
+    @model_validator(mode="after")
+    def _preserving_needs_a_search(self) -> Self:
+        if self.preserve_previous and self.algorithm != "lns":
+            raise ValueError("preserve_previous needs algorithm 'lns'")
+        return self
 
 
 class JobRead(BaseModel):

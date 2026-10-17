@@ -45,7 +45,10 @@ export async function startOptimization(publicId: string): Promise<StartResult> 
   const result = await api.POST("/v1/events/{public_id}/optimizations", {
     params: { path: { public_id: publicId }, header: undefined },
     headers: organizerAuth(publicId),
-    body: { algorithm: "lns" },
+    // Always asked for: once an organizer has made a plan active, people have arranged their week
+    // around it, so a re-solve should move as few of them as it can (docs/design.md 8.4). With no
+    // active plan the API treats it as an ordinary solve.
+    body: { algorithm: "lns", preserve_previous: true },
   });
 
   if (result.response.status === 409) {

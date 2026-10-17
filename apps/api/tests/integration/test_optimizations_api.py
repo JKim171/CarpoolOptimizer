@@ -722,3 +722,104 @@ async def test_no_more_than_two_solves_run_at_once(api_client: AsyncClient, monk
     await asyncio.gather(*(optimize(api_client, event) for event in events))
 
     assert peak == SOLVE_CONCURRENCY
+
+
+# -- re-optimization against the active solution (docs/design.md 8.4) ------------------------------
+
+
+async def _activate(client: AsyncClient, event: tuple[str, dict[str, str]], job: dict) -> None:
+    public_id, headers = event
+    response = await client.post(
+        f"/v1/events/{public_id}/solutions/{job['solution_id']}/activate", headers=headers
+    )
+    assert response.status_code == 200, response.text
+
+
+async def _drivers_of(engine: AsyncEngine, solution_id: str) -> dict[str, str]:
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    "select s.participant_id, r.driver_participant_id from route_stops s"
+                    " join routes r on r.id = s.route_id"
+                    " where r.solution_id = :s and s.leg = 'outbound'"
+                ),
+                {"s": solution_id},
+            )
+        ).all()
+    return {str(rider): str(driver) for rider, driver in rows}
+
+
+async def test_preserving_needs_the_search(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    """Greedy builds from nothing and cannot keep anyone where they were, so it is refused."""
+    await seed_roster(api_client, organizer_event)
+
+    await optimize(
+        api_client,
+        organizer_event,
+        expect=422,
+        json={"algorithm": "greedy", "preserve_previous": True},
+    )
+
+
+async def test_preserving_with_nothing_active_is_an_ordinary_solve(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    await seed_roster(api_client, organizer_event)
+    first = await optimize(api_client, organizer_event)
+
+    again = await optimize(
+        api_client, organizer_event, expect=200, json={"preserve_previous": True}
+    )
+
+    assert again["job_id"] == first["job_id"]
+    assert again["weights"]["churn"] == 0.0
+
+
+async def test_preserving_keeps_riders_with_their_drivers_after_someone_joins(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], engine: AsyncEngine
+) -> None:
+    await add(
+        api_client, organizer_event, person("Sam", "driver", role="driver", seats_available=3)
+    )
+    await add(api_client, organizer_event, person("Cy", "north", role="driver", seats_available=3))
+    await add(api_client, organizer_event, person("Ada", "east"))
+    await add(api_client, organizer_event, person("Bo", "west"))
+    first = await optimize(api_client, organizer_event)
+    await _activate(api_client, organizer_event, first)
+    before = await _drivers_of(engine, first["solution_id"])
+
+    await add(api_client, organizer_event, person("Dee", "west"))
+    job = await optimize(api_client, organizer_event, json={"preserve_previous": True})
+
+    assert job["status"] == "succeeded"
+    assert job["weights"]["churn"] == 300.0
+    after = await _drivers_of(engine, job["solution_id"])
+    assert {rider: after[rider] for rider in before} == before
+    async with engine.connect() as conn:
+        metrics = (
+            await conn.execute(
+                text("select metrics from solutions where id = :s"), {"s": job["solution_id"]}
+            )
+        ).scalar_one()
+    assert metrics["churn"] == 0
+
+
+async def test_preserving_is_its_own_problem_and_is_reused_as_one(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    """The active solution is in the fingerprint: a plain solve's answer is not reused for a
+    preserving one, but a repeated preserving request reuses its own."""
+    await seed_roster(api_client, organizer_event)
+    first = await optimize(api_client, organizer_event)
+    await _activate(api_client, organizer_event, first)
+
+    preserving = await optimize(api_client, organizer_event, json={"preserve_previous": True})
+    repeated = await optimize(
+        api_client, organizer_event, expect=200, json={"preserve_previous": True}
+    )
+
+    assert preserving["job_id"] != first["job_id"]
+    assert repeated["job_id"] == preserving["job_id"]
