@@ -1,13 +1,15 @@
 .PHONY: setup hooks test lint fmt typecheck check audit lock db migrate revision api \
-        web-setup web web-check openapi demo
+        web-setup web web-check openapi demo bench bench-report
 
-# Runtime dependencies come from the hashed lock, the local packages are installed on top without
-# resolving anything, and the dev tools last. CI installs in the same three steps.
+# Runtime dependencies come from the hashed lock and the benchmark-only ones from theirs, the local
+# packages are installed on top without resolving anything, and the dev tools last. CI installs in
+# the same steps.
 setup: web-setup hooks
 	python3 -m venv .venv
 	.venv/bin/pip install -q -U pip
 	.venv/bin/pip install -q --require-hashes -r requirements.txt
-	.venv/bin/pip install -q --no-deps -e packages/domain -e apps/api
+	.venv/bin/pip install -q --require-hashes -r requirements-bench.txt
+	.venv/bin/pip install -q --no-deps -e packages/domain -e apps/api -e packages/bench
 	.venv/bin/pip install -q -r requirements-dev.txt
 
 # .git/hooks is not committed, so a fresh clone has no hooks until this runs.
@@ -29,7 +31,7 @@ fmt:
 	.venv/bin/ruff format . && .venv/bin/ruff check --fix .
 
 typecheck:
-	.venv/bin/mypy packages/domain/src apps/api/src
+	.venv/bin/mypy packages/domain/src apps/api/src packages/bench/src
 
 # prettier, eslint, the generated-types drift check, and tsc.
 web-check:
@@ -37,17 +39,22 @@ web-check:
 
 check: lint typecheck test web-check
 
-# Known advisories against the pinned runtime dependencies. Needs the network, so it runs in CI and
-# on demand rather than inside `check`.
+# Known advisories against the pinned runtime and benchmark dependencies. Needs the network, so it
+# runs in CI and on demand rather than inside `check`.
 audit:
 	.venv/bin/pip-audit --disable-pip --require-hashes -r requirements.txt
+	.venv/bin/pip-audit --disable-pip --require-hashes -r requirements-bench.txt
 
-# Re-resolve the runtime lock after changing a dependency in a pyproject.toml. Existing pins are
-# kept; `make lock LOCK_FLAGS=--upgrade` moves every pin to the newest release the ranges allow.
+# Re-resolve both locks after changing a dependency in a pyproject.toml. Existing pins are kept;
+# `make lock LOCK_FLAGS=--upgrade` moves every pin to the newest release the ranges allow. The
+# benchmark lock is constrained by the runtime one, so it is compiled second.
 lock:
 	.venv/bin/pip-compile -q --generate-hashes --strip-extras $(LOCK_FLAGS) \
 	  --unsafe-package carpool-api --unsafe-package carpool-domain \
 	  -o requirements.txt requirements.in
+	.venv/bin/pip-compile -q --generate-hashes --strip-extras $(LOCK_FLAGS) \
+	  --unsafe-package carpool-bench --unsafe-package carpool-domain \
+	  -o requirements-bench.txt requirements-bench.in
 
 db:
 	docker compose up -d --build postgres
@@ -79,3 +86,12 @@ openapi:
 demo:
 	DATABASE_URL=postgresql+asyncpg://unused/unused \
 	  .venv/bin/python -m carpool_api.demo apps/web/lib/demo/event.json
+
+# The benchmark grid (docs/design.md 8.5): about half an hour, most of it CP-SAT proving the
+# 50-person instances optimal. Commit the results it writes, then `make bench-report`.
+bench:
+	.venv/bin/python -m carpool_bench run --out docs/benchmarks/results.json
+
+bench-report:
+	.venv/bin/python -m carpool_bench report docs/benchmarks/results.json \
+	  --out docs/benchmarks/README.md

@@ -1,0 +1,12 @@
+# Input to the benchmark lock. `make lock` compiles this into requirements-bench.txt, pinned and
+# hashed like the runtime lock. OR-Tools is a benchmark-only dependency (docs/design.md 8.3): this
+# file is installed for development and CI, and never by the production image.
+#
+# carpool-domain is listed for the same reason requirements.in lists it: so the resolver reads it
+# from the working tree rather than looking for it on PyPI.
+#
+# Constrained by the runtime lock, so the two can be installed into one environment without either
+# moving a package the other pinned.
+-c requirements.txt
+-e ./packages/domain
+-e ./packages/bench

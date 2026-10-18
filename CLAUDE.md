@@ -67,8 +67,10 @@ make db        # postgres + postgis via docker compose
 make api       # uvicorn on :8000
 make web       # next dev on :3000
 make openapi   # regenerate the API contract and the TypeScript types built from it
-make lock      # re-resolve requirements.txt, the hashed runtime lock, from requirements.in
-make audit     # known advisories against the locked runtime dependencies (needs the network)
+make lock      # re-resolve both hashed locks: requirements.txt (runtime), requirements-bench.txt
+make audit     # known advisories against both locks (needs the network)
+make bench     # the benchmark grid, ~30 min; writes docs/benchmarks/results.json
+make bench-report  # render docs/benchmarks/README.md from that JSON
 ```
 
 `make check` must pass before a commit. CI runs the same steps, in two jobs (`check` and `web`),
@@ -78,6 +80,10 @@ plus `make audit`.
 package to an exact version and hash, and is installed with `--require-hashes` locally and in CI;
 the production image must do the same. After changing a dependency range in a `pyproject.toml`, run
 `make lock` and commit both files. Dev tools are pinned exactly in `requirements-dev.txt`.
+
+**OR-Tools is benchmark-only** (`docs/design.md` §8.3). It lives in `packages/bench` and its own
+hashed lock, `requirements-bench.txt`, which development and CI install and the production image
+never does. Nothing under `packages/domain` or `apps/api` may import `carpool_bench` or `ortools`.
 
 **The API contract is generated, not hand-written.** `apps/web/lib/api/schema.d.ts` comes from
 `apps/web/lib/api/openapi.json`, which comes from the Pydantic schemas. Change a route or a model
@@ -100,6 +106,7 @@ later. `.git/hooks` is not committed, so the hook lives in `.githooks/` and `mak
 
 ```
 packages/domain/   pure optimization domain — models, objective, feasibility validation
+packages/bench/    benchmark harness and the exact CP-SAT model (benchmark-only; not in the image)
 apps/api/          FastAPI service — schema, endpoints, the DB↔domain adapter
 apps/web/          Next.js frontend (App Router, TypeScript strict)
 infra/             Terraform — VPC, instance, buckets, IAM, alarms

@@ -32,16 +32,19 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements.txt
+            requirements-bench.txt
             requirements-dev.txt
       - run: pip install -U pip
       - run: pip install --require-hashes -r requirements.txt
-      - run: pip install --no-deps -e packages/domain -e apps/api
+      - run: pip install --require-hashes -r requirements-bench.txt
+      - run: pip install --no-deps -e packages/domain -e apps/api -e packages/bench
       - run: pip install -r requirements-dev.txt
       - run: pip check
       - run: pip-audit --disable-pip --require-hashes -r requirements.txt
+      - run: pip-audit --disable-pip --require-hashes -r requirements-bench.txt
       - run: ruff check .
       - run: ruff format --check .
-      - run: mypy packages/domain/src apps/api/src
+      - run: mypy packages/domain/src apps/api/src packages/bench/src
       # The integration tests run this exact image through testcontainers, so it has to exist
       # locally first. Without it they skip rather than fail, which would hide a broken schema.
       - run: docker build -t carpool-postgres:16 docker/postgres

@@ -44,8 +44,10 @@ DEFAULT_EVENT_DURATION_SECONDS = 2 * 60 * 60
 
 _METERS_PER_DEGREE_LAT = 111_320.0
 #: Fraction of participants who could drive but are willing to ride instead. These are where
-#: vehicle-count savings come from, so an instance without any is unrealistically rigid.
-_FLEXIBLE_SHARE = 0.15
+#: vehicle-count savings come from, so an instance without any is unrealistically rigid -- but it is
+#: also the shape production solves today, since the roster UI does not offer the role
+#: (docs/design.md 2.3). The benchmark harness passes 0 to measure that shape.
+DEFAULT_FLEXIBLE_SHARE = 0.15
 
 
 def _offset(origin: Location, north_m: float, east_m: float) -> Location:
@@ -102,18 +104,21 @@ def generate_instance(
     event_duration_seconds: int = DEFAULT_EVENT_DURATION_SECONDS,
     weights: ObjectiveWeights | None = None,
     max_detour_seconds: int | None = None,
+    flexible_share: float = DEFAULT_FLEXIBLE_SHARE,
 ) -> ProblemInstance:
     """Build a reproducible synthetic instance of `n` participants."""
     if n < 1:
         raise ValueError("n must be >= 1")
     if not 0.0 < driver_ratio <= 1.0:
         raise ValueError("driver_ratio must be in (0, 1]")
+    if not 0.0 <= flexible_share <= 1.0:
+        raise ValueError("flexible_share must be in [0, 1]")
 
     rng = random.Random(seed)
     locations = _points(rng, destination, n, radius_km * 1000, distribution)
 
     drivers = max(1, round(n * driver_ratio))
-    flexible = round((n - drivers) * _FLEXIBLE_SHARE)
+    flexible = round((n - drivers) * flexible_share)
 
     participants: list[Participant] = []
     for index, location in enumerate(locations):
