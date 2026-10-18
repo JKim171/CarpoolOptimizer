@@ -921,10 +921,19 @@ optimal on 20–25 participant instances; then run CP-SAT with a time limit for 
 fall back to LNS. The strategy interface makes that a configuration change.
 
 **Measured against that trigger (`docs/benchmarks/`, synthetic instances):** with seats for
-everyone, LNS lands 0.19% above optimal on average at n = 20 (worst 1.7%) and 1.44% at n = 50
-(worst 6.4%), so the trigger is not met. In seat-short events (driver ratio 0.2, about a quarter
-of riders unseatable) it lands 5.6% above at n = 20 (worst 12.1%) and 43.5% at n = 50 — the
-trigger is met there, and choosing who is left out is where the heuristics are weakest.
+everyone, LNS lands 0.19% above optimal on average at n = 20 (worst 1.7%) and 0.72% at n = 50
+(worst 2.8%). In seat-short events (driver ratio 0.2, about a quarter of riders unseatable) it
+lands 0.72% above at n = 20 (worst 3.7%) and 7.8% at n = 50 (worst 11.7%). The trigger is not met.
+
+It was, on the first measurement: seat-short events were 5.6% off at n = 20 and 43.5% at n = 50.
+Choosing who is left out is most of the cost there, and two things made LNS bad at it. Greedy's
+furthest-first order spends the last seats on the riders dearest to carry, and the search
+inherited that order in half its rebuilds; and every insertion into a full car paid for a
+feasibility check per position before failing on seats, so a seat-short 50-person search managed
+71 iterations a second. LNS now refuses a full car before pricing it (about 1,200 iterations a
+second there), and in seat-short events starts from, and rebuilds by, seating whoever is
+cheapest next. A move swapping a stranded rider for a seated one was tried as well and measured
+no better, so it is not there.
 
 Why the exact model reaches the cap at all: sequencing is exact and local to one car (§8.2), so a
 car's cost depends only on who is in it. Every (driver, set of riders that fits) pair is

@@ -24,6 +24,13 @@ every state, and a rebuild seating a rider charges it too, so the search leans t
 old car rather than only rejecting moves away from it after the fact. The search also starts from
 `previous` itself, repaired for whoever joined, left or changed since, unless greedy's fresh
 answer is cheaper even with the churn counted.
+
+When there are fewer seats than riders, the search's main job changes: someone is left out
+whatever it does, and choosing who is most of the cost (docs/benchmarks/). Seating riders
+furthest-first, which is greedy's order and usually right, spends the last seats on exactly the
+riders dearest to carry. So in a seat-short event the search also starts from a construction that
+seats whoever is cheapest next, when that beats its starting point, and rebuilds that way where it
+would otherwise rebuild furthest-first.
 """
 
 from __future__ import annotations
@@ -116,6 +123,11 @@ class _Search:
             )
             for r in riders
         }
+        #: Fewer seats than riders, so someone is left out whatever the search does, and who that
+        #: is becomes most of what the search decides.
+        self.seat_short = sum(p.seats for p in instance.participants if p.role.can_drive) < len(
+            riders
+        )
 
     # -- pricing -----------------------------------------------------------------------------
 
@@ -213,7 +225,7 @@ class _Search:
                 state.routes[driver] = _without(state.routes[driver], rider)
         return removed
 
-    def recreate(self, state: _State, pending: set[str]) -> None:
+    def recreate(self, state: _State, pending: set[str], *, cheapest: bool = False) -> None:
         """Seat everyone in `pending` and every already-unassigned rider, cheapest place first."""
         instance = self.instance
         pool = pending | state.unassigned
@@ -242,9 +254,15 @@ class _Search:
 
         # The order riders are rebuilt in is itself randomized: furthest-first is greedy's choice
         # and usually right, but not always, and the search is only as varied as its rebuilds.
+        # When seats run short it is usually wrong: the riders it seats first are the dearest to
+        # carry, so they take the last seats and the cheap ones are left out. There it gives way
+        # to seating whoever is cheapest next, which leaves out whoever is dearest.
         order = sorted(pool)
         matrix_to_venue = {r: instance.matrix.duration(r, DESTINATION) for r in order}
         style = self.rng.random()
+        if cheapest or (style < 0.5 and self.seat_short):
+            self._seat_cheapest_first(state, [r for r in order if r in pool])
+            return
         if style < 0.5:
             order.sort(key=lambda r: -matrix_to_venue[r])
         elif style < 0.75:
@@ -259,6 +277,36 @@ class _Search:
             self._seat(state, rider)
 
     def _seat(self, state: _State, rider: str) -> None:
+        offer = self._offer(state, rider)
+        if offer is None:
+            state.unassigned.add(rider)
+        else:
+            state.routes[offer[0]] = offer[1]
+
+    def _seat_cheapest_first(self, state: _State, riders: list[str]) -> None:
+        """Seat `riders` one at a time, always whichever is cheapest to seat next."""
+        offers = {r: self._offer(state, r) for r in riders}
+        while offers:
+            seatable = [(offer[2], r) for r, offer in offers.items() if offer is not None]
+            if not seatable:
+                state.unassigned.update(offers)
+                return
+            _, rider = min(seatable)
+            offer = offers.pop(rider)
+            assert offer is not None
+            driver, route, _ = offer
+            opened = driver not in state.routes
+            state.routes[driver] = route
+            # Only offers into the car that changed are stale -- or, when a car was opened, every
+            # offer, since the new car may be nearer than any that was considered. Offers into
+            # other cars still stand: their cars did not change.
+            for other, standing in offers.items():
+                if opened or (standing is not None and standing[0] == driver):
+                    offers[other] = self._offer(state, other)
+
+    def _offer(self, state: _State, rider: str) -> tuple[str, Route, float] | None:
+        """The cheapest seat for `rider` as things stand: the driver, their car with `rider` in it,
+        and the price. A flexible rider's own new car is offered with themselves as the driver."""
         instance = self.instance
         best: tuple[str, Route, float] | None = None
         seen = 0
@@ -280,12 +328,27 @@ class _Search:
         if participant.role.can_drive and route_feasible(instance, solo):
             solo_cost = instance.weights.vehicle + self.route_cost(instance, solo)
             if best is None or best[2] > solo_cost:
-                state.routes[rider] = solo
-                return
-        if best is None:
-            state.unassigned.add(rider)
-        else:
-            state.routes[best[0]] = best[1]
+                return (rider, solo, solo_cost)
+        return best
+
+    def cheapest_start(self) -> _State:
+        """Every rider seated cheapest-first into empty cars, each car then ordered exactly.
+
+        Greedy's furthest-first construction strands the riders who are cheapest to carry when
+        seats run short, and starting there leaves the search to undo most of it.
+        """
+        instance = self.instance
+        state = _State(
+            {p.id: Route(p.id) for p in instance.participants if p.role is Role.DRIVER}, set()
+        )
+        riders = {
+            p.id
+            for p in instance.participants
+            if p.role is not Role.DRIVER and (p.needs_outbound or p.needs_return)
+        }
+        self.recreate(state, riders, cheapest=True)
+        state.routes = {d: self.tidy(route) for d, route in state.routes.items()}
+        return state
 
     def warm_start(self, previous: Solution) -> _State:
         """`previous`, repaired to fit this instance, with everyone else seated by `recreate`.
@@ -375,9 +438,10 @@ def solve(
     `initial` must be feasible; it is the floor on quality, since the best solution seen is what
     comes back. `previous` prices churn against an earlier solution, at `weights.churn`; without an
     `initial`, the search then starts from whichever of the repaired `previous` and greedy's answer
-    costs less. Without `progress`, the same instance, initial solution and seed always give the
-    same answer; with it, how far the search gets depends on how fast the machine is. `iterations`
-    stays a cap either way.
+    costs less. A seat-short instance adds a third candidate start, built cheapest-first. Without
+    `progress`, the same instance, initial solution and seed always give the same answer; with it,
+    how far the search gets depends on how fast the machine is. `iterations` stays a cap either
+    way.
     """
     rng = random.Random(seed)
     search = _Search(instance, rng, candidate_drivers, previous)
@@ -391,6 +455,11 @@ def solve(
             warm_cost = search.total(warm)
             if warm_cost < current_cost:
                 current, current_cost = warm, warm_cost
+    if search.seat_short:
+        built = search.cheapest_start()
+        built_cost = search.total(built)
+        if built_cost < current_cost:
+            current, current_cost = built, built_cost
     best, best_cost = current.copy(), current_cost
 
     # Temperature is scaled to the cost of driving, not to the unassigned penalty: one stranded

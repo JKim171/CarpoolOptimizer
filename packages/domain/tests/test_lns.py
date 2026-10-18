@@ -3,7 +3,20 @@ from dataclasses import replace
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from carpool_domain import Distribution, evaluate, generate_instance, greedy, lns, validate
+from carpool_domain import (
+    DESTINATION,
+    Distribution,
+    Location,
+    Participant,
+    ProblemInstance,
+    Role,
+    evaluate,
+    generate_instance,
+    greedy,
+    haversine_matrix,
+    lns,
+    validate,
+)
 
 instances = st.builds(
     generate_instance,
@@ -90,6 +103,62 @@ def test_pins_survive_the_search():
 
     assert validate(pinned, solution) == []
     assert solution.driver_of(rider.id) == driver.id
+
+
+# -- seat-short events: who is left out -----------------------------------------------------------
+
+
+def _one_seat_two_riders():
+    """One seat, two riders: `near` sits on the driver's way in, `far` is miles the other way."""
+    venue = Location(43.07, -89.40)
+    people = (
+        Participant("d", Location(43.115, -89.40), role=Role.DRIVER, seats=1),
+        Participant("near", Location(43.0925, -89.40)),
+        Participant("far", Location(43.0, -89.40)),
+    )
+    nodes = {p.id: p.location for p in people} | {DESTINATION: venue}
+    return ProblemInstance(
+        destination=venue,
+        arrival_by=1_000_000,
+        ends_at=1_007_200,
+        participants=people,
+        matrix=haversine_matrix(nodes),
+    )
+
+
+def test_greedy_spends_the_last_seat_on_the_dearest_rider():
+    # The failure the seat-short handling exists for: furthest-first reaches `far` first.
+    assert greedy.solve(_one_seat_two_riders()).unassigned == ("near",)
+
+
+def test_a_seat_short_search_leaves_out_the_rider_dearest_to_carry():
+    instance = _one_seat_two_riders()
+    # No moves at all: the answer is where the search starts.
+    solution = lns.solve(instance, initial=greedy.solve(instance), progress=lambda: 1.0)
+
+    assert validate(instance, solution) == []
+    assert solution.unassigned == ("far",)
+
+
+@slow
+@given(
+    st.builds(
+        generate_instance,
+        n=st.integers(min_value=4, max_value=25),
+        driver_ratio=st.floats(min_value=0.05, max_value=0.25),
+        distribution=st.sampled_from(list(Distribution)),
+        seed=st.integers(min_value=0, max_value=10_000),
+        flexible_share=st.sampled_from([0.0, 0.15]),
+        max_detour_seconds=st.one_of(st.none(), st.integers(min_value=0, max_value=3600)),
+    ),
+    st.integers(min_value=0, max_value=1000),
+)
+def test_seat_short_searches_stay_feasible_and_never_lose_ground(instance, seed):
+    start = greedy.solve(instance)
+    solution = lns.solve(instance, initial=start, iterations=60, seed=seed)
+
+    assert validate(instance, solution) == []
+    assert evaluate(instance, solution).total <= evaluate(instance, start).total
 
 
 # -- re-optimization against a previous solution (docs/design.md 8.4) ------------------------------
