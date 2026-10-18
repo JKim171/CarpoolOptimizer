@@ -49,6 +49,14 @@ def best_insertion(
 ) -> tuple[Route, float] | None:
     """Cheapest feasible way to add `rider` to `route`, with its marginal cost, or None."""
     participant = instance.participant(rider)
+    # Occupancy does not depend on the order of the stops, so a car with no seat left on a leg the
+    # rider needs refuses every position. Checking that once here, rather than in the feasibility
+    # check of each would-be winner below, is most of the time a seat-short event takes to solve.
+    seats = instance.participant(route.driver_id).seats
+    if (participant.needs_outbound and len(route.outbound) >= seats) or (
+        participant.needs_return and len(route.inbound) >= seats
+    ):
+        return None
     base = cost(instance, route)
     outbound_options = (
         list(_positions(route.outbound, rider)) if participant.needs_outbound else [route.outbound]

@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from carpool_domain import Distribution, Role, generate_instance, greedy, validate
+from carpool_domain import Distribution, Role, Route, generate_instance, greedy, validate
 
 
 def test_everyone_is_seated_when_there_is_room(instance):
@@ -68,3 +68,14 @@ def test_a_flexible_rider_will_drive_rather_than_be_stranded():
 def test_solving_is_deterministic():
     instance = generate_instance(n=40, seed=7)
     assert greedy.solve(instance) == greedy.solve(instance)
+
+
+def test_a_full_car_is_refused_before_any_position_is_priced(instance):
+    full = replace(instance.participant("d"), seats=1)
+    one_seat = replace(instance, participants=(full, *instance.participants[1:]))
+
+    def unpriceable(_instance, _route):
+        raise AssertionError("priced a car with no seat left")
+
+    car = Route("d", ("a",), ("a",))
+    assert greedy.best_insertion(one_seat, car, "b", cost=unpriceable) is None
