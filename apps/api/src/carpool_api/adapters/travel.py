@@ -22,7 +22,7 @@ same formula eventually will not.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import pairwise
 from typing import Protocol
 
@@ -58,6 +58,9 @@ class TravelEstimates:
     #: left out of the solve and reported as unassigned, rather than sending everyone else to
     #: estimates (docs/design.md 4.4).
     unroutable: frozenset[NodeId] = frozenset()
+    #: Metres from each node to the road the provider snapped it to. A large one is a free sign that
+    #: an address geocoded wrong (docs/design.md 7.2). Empty when the provider does not report it.
+    snapped_m: Mapping[NodeId, int] = field(default_factory=dict)
 
     def distance_m(self, origin: NodeId, destination: NodeId) -> int:
         """Metres from `origin` to `destination`, mirroring `TravelMatrix.duration`'s contract:
@@ -179,6 +182,22 @@ def _unroutable(tables: list[list[list[float | None]]], order: list[NodeId]) -> 
     return frozenset(order[k] for k in removed)
 
 
+def _snapped(payload: dict[str, object], order: list[NodeId]) -> dict[NodeId, int]:
+    """Each node's snap distance from the response's `sources`, where it gives one.
+
+    Advisory, so never a reason to refuse an answer: a missing or odd entry is simply not reported.
+    """
+    sources = payload.get("sources")
+    if not isinstance(sources, list) or len(sources) != len(order):
+        return {}
+    snapped: dict[NodeId, int] = {}
+    for node, source in zip(order, sources, strict=True):
+        distance = source.get("snapped_distance") if isinstance(source, dict) else None
+        if isinstance(distance, int | float):
+            snapped[node] = round(distance)
+    return snapped
+
+
 def parse_matrix(payload: object, order: list[NodeId]) -> TravelEstimates:
     """Read an ORS matrix response whose rows and columns follow `order`.
 
@@ -198,6 +217,9 @@ def parse_matrix(payload: object, order: list[NodeId]) -> TravelEstimates:
         _distances_m={(a, b): round(_cell(distances, i, j)) for i, a, j, b in pairs},
         provider="ors",
         unroutable=unroutable,
+        snapped_m={
+            node: m for node, m in _snapped(payload, order).items() if node not in unroutable
+        },
     )
 
 

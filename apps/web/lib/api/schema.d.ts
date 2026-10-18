@@ -489,6 +489,22 @@ export interface components {
          * @enum {string}
          */
         EventStatus: "draft" | "open" | "locked" | "archived";
+        /**
+         * FarFromRoad
+         * @description A pickup the routing provider had to move a long way to reach a road -- usually an address
+         *     that geocoded to the wrong place (docs/design.md 7.2).
+         */
+        FarFromRoad: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Participant Id
+             * Format: uuid
+             */
+            participant_id: string;
+            /** Snapped M */
+            snapped_m: number;
+        };
         /** GeocodeRequest */
         GeocodeRequest: {
             /** Addresses */
@@ -900,6 +916,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Far From Road */
+            far_from_road: components["schemas"]["FarFromRoad"][];
             /**
              * Id
              * Format: uuid

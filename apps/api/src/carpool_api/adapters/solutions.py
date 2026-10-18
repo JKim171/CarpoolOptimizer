@@ -21,6 +21,7 @@ from carpool_api import models
 from carpool_api.adapters.instance import LoadedInstance
 from carpool_api.models import RouteLeg
 from carpool_domain import (
+    DESTINATION,
     Constraint,
     Solution,
     evaluate,
@@ -45,6 +46,10 @@ REASON_BY_CONSTRAINT = {
 #: Not a constraint: the routing provider could not reach this person's address by road, so they
 #: were never part of the instance (`adapters/travel.py`).
 UNROUTABLE = "unroutable"
+
+#: A pickup further than this from the road it was snapped to is flagged to the organizer. A house
+#: is rarely more than ~100 m from its road; the provider's own directions refuse beyond 350 m.
+FAR_FROM_ROAD_M = 250
 
 
 def _moment(epoch_seconds: int) -> datetime:
@@ -86,6 +91,13 @@ def solution_metrics(
         #: "ors" for road times, "haversine" for straight-line estimates -- which every number
         #: above was computed from.
         "travel": loaded.estimates.provider,
+        #: Participant id -> metres, for pickups that snapped suspiciously far from a road. The
+        #: venue is left out: its pin is the organizer's own, placed and confirmed on a map.
+        "far_from_road": {
+            node: metres
+            for node, metres in sorted(loaded.estimates.snapped_m.items())
+            if metres > FAR_FROM_ROAD_M and node != DESTINATION
+        },
     }
     return breakdown.total, metrics
 

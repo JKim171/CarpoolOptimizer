@@ -249,6 +249,31 @@
         "title": "EventStatus",
         "type": "string"
       },
+      "FarFromRoad": {
+        "description": "A pickup the routing provider had to move a long way to reach a road -- usually an address\nthat geocoded to the wrong place (docs/design.md 7.2).",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "participant_id": {
+            "format": "uuid",
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "snapped_m": {
+            "title": "Snapped M",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "participant_id",
+          "display_name",
+          "snapped_m"
+        ],
+        "title": "FarFromRoad",
+        "type": "object"
+      },
       "GeocodeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1337,6 +1362,13 @@
             "title": "Created At",
             "type": "string"
           },
+          "far_from_road": {
+            "items": {
+              "$ref": "#/components/schemas/FarFromRoad"
+            },
+            "title": "Far From Road",
+            "type": "array"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1403,7 +1435,8 @@
           "travel",
           "created_at",
           "routes",
-          "unassigned"
+          "unassigned",
+          "far_from_road"
         ],
         "title": "SolutionRead",
         "type": "object"

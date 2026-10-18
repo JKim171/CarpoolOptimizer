@@ -304,6 +304,10 @@ for the same problem asks ORS again instead of being handed the estimate. The co
 is part of `input_fingerprint`, so adding the key to a deployment does not reuse a single answer
 computed without it.
 
+Each point's `snapped_distance` is read from the same response. A pickup more than 250 m from its
+road is listed on the solution as `far_from_road`, and the results screen asks the organizer to
+check that address. The venue is not, since its pin is one the organizer placed.
+
 **Route geometry is fetched lazily.** Drawing a route takes one Directions call per car per leg —
 ~30 for a 50-person event, most of the per-minute quota and ~66 solves/day. So geometry is fetched
 when someone first opens a route and then persisted (§7.5); a rider opening their own car costs

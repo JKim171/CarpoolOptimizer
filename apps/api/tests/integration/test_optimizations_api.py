@@ -23,7 +23,7 @@ from carpool_api.adapters.travel import (
     haversine_estimates,
     parse_matrix,
 )
-from carpool_domain import Location, NodeId
+from carpool_domain import DESTINATION, Location, NodeId
 
 
 async def test_optimizing_an_event_succeeds_inline(
@@ -922,8 +922,9 @@ class Unroutable:
 
     provider = "ors"
 
-    def __init__(self, *participant_ids: str) -> None:
+    def __init__(self, *participant_ids: str, snapped: Mapping[str, float] | None = None) -> None:
         self.unroutable = set(participant_ids)
+        self.snapped = dict(snapped or {})
 
     async def estimates(self, nodes: Mapping[NodeId, Location]) -> TravelEstimates:
         order = list(nodes)
@@ -937,7 +938,8 @@ class Unroutable:
             ]
             for a in order
         ]
-        return parse_matrix({"durations": square, "distances": square}, order)
+        sources = [{"snapped_distance": self.snapped.get(node, 5.0)} for node in order]
+        return parse_matrix({"durations": square, "distances": square, "sources": sources}, order)
 
 
 async def _unassigned(
@@ -1028,3 +1030,47 @@ async def test_a_re_solve_survives_losing_a_driver_the_active_plan_used(
         ada["id"]: kept["id"],
         bo["id"]: kept["id"],
     }
+
+
+async def test_a_pickup_far_from_any_road_is_flagged_furthest_first(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]], travel: Any
+) -> None:
+    """A large snap is a free sign of a bad geocode (docs/design.md 7.2). Only beyond the threshold,
+    and nobody who was left out entirely -- they already have a reason of their own -- and never
+    the venue, whose pin the organizer placed themselves."""
+    roster = await seed_roster(api_client, organizer_event)
+    travel.current = Unroutable(
+        roster["north"]["id"],
+        snapped={
+            roster["east"]["id"]: 300.0,
+            roster["west"]["id"]: 900.0,
+            roster["driver"]["id"]: 250.0,
+            roster["north"]["id"]: 5000.0,
+            DESTINATION: 2000.0,
+        },
+    )
+    job = await optimize(api_client, organizer_event)
+
+    public_id, headers = organizer_event
+    response = await api_client.get(
+        f"/v1/events/{public_id}/solutions/{job['solution_id']}", headers=headers
+    )
+
+    assert response.json()["far_from_road"] == [
+        {"participant_id": roster["west"]["id"], "display_name": "Bo", "snapped_m": 900},
+        {"participant_id": roster["east"]["id"], "display_name": "Ada", "snapped_m": 300},
+    ]
+
+
+async def test_a_solve_on_estimates_flags_nothing(
+    api_client: AsyncClient, organizer_event: tuple[str, dict[str, str]]
+) -> None:
+    await seed_roster(api_client, organizer_event)
+    job = await optimize(api_client, organizer_event)
+
+    public_id, headers = organizer_event
+    response = await api_client.get(
+        f"/v1/events/{public_id}/solutions/{job['solution_id']}", headers=headers
+    )
+
+    assert response.json()["far_from_road"] == []

@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
@@ -29,6 +29,7 @@ from carpool_api.db import get_session
 from carpool_api.geo import latitude_of, line, longitude_of, simplified_geojson
 from carpool_api.models import Event, Participant, Route, RouteLeg, Solution
 from carpool_api.schemas.solutions import (
+    FarFromRoad,
     LegRead,
     RouteGeometry,
     RouteRead,
@@ -149,7 +150,26 @@ def _read(solution: Solution, people: dict[uuid.UUID, Participant], version: int
             )
             for row in sorted(solution.unassigned, key=lambda r: str(r.participant_id))
         ],
+        far_from_road=_far_from_road(solution.metrics, people),
     )
+
+
+def _far_from_road(
+    metrics: dict[str, Any], people: dict[uuid.UUID, Participant]
+) -> list[FarFromRoad]:
+    """Out of `metrics`, furthest first. A solution from before snap distances were recorded has
+    none, and neither does one solved on estimates."""
+    recorded = metrics.get("far_from_road") or {}
+    found = [
+        FarFromRoad(
+            participant_id=uuid.UUID(node),
+            display_name=people[uuid.UUID(node)].display_name,
+            snapped_m=metres,
+        )
+        for node, metres in recorded.items()
+        if uuid.UUID(node) in people
+    ]
+    return sorted(found, key=lambda f: (-f.snapped_m, f.display_name))
 
 
 @router.get("", response_model=list[SolutionSummary])

@@ -93,6 +93,15 @@ class UnassignedRead(BaseModel):
     reason: str
 
 
+class FarFromRoad(BaseModel):
+    """A pickup the routing provider had to move a long way to reach a road -- usually an address
+    that geocoded to the wrong place (docs/design.md 7.2)."""
+
+    participant_id: uuid.UUID
+    display_name: str
+    snapped_m: int
+
+
 class SolutionRead(BaseModel):
     """A full solution, as the results screen needs it."""
 
@@ -114,6 +123,8 @@ class SolutionRead(BaseModel):
     created_at: datetime
     routes: list[RouteRead]
     unassigned: list[UnassignedRead]
+    #: Furthest first. Empty on estimates, which snap nothing.
+    far_from_road: list[FarFromRoad]
 
 
 class SolutionSummary(BaseModel):

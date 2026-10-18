@@ -15,6 +15,7 @@
 
 import { Button, Notice, Problem } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/client";
+import { describeFarFromRoad } from "@/lib/results/farFromRoad";
 
 import { LegSwitch } from "./LegSwitch";
 import { ResultSummary } from "./ResultSummary";
@@ -73,6 +74,13 @@ export function ResultsPanel({
               service could not be reached, or an address is too far from a road to route to.
               Re-optimize to try again.
             </Notice>
+          )}
+
+          {/* A pickup the routing service had to move a long way to reach a road is usually an
+              address that geocoded to the wrong place (docs/design.md 7.2). The plan still uses
+              it, so this asks for a look rather than calling it wrong. */}
+          {solve.solution.far_from_road.length > 0 && (
+            <Notice>{describeFarFromRoad(solve.solution.far_from_road)}</Notice>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-2">

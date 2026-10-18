@@ -16,6 +16,7 @@ export type Leg = components["schemas"]["LegRead"];
 export type Stop = components["schemas"]["StopRead"];
 export type Unassigned = components["schemas"]["UnassignedRead"];
 export type SolutionGeometry = components["schemas"]["SolutionGeometry"];
+export type FarFromRoad = components["schemas"]["FarFromRoad"];
 
 /**
  * Which leg is on screen.
@@ -119,7 +120,5 @@ export function formatDuration(seconds: number): string {
   return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
 }
 
-/** Metres to the nearest tenth of a mile. The audience is a US campus club (docs/design.md 2). */
-export function formatDistance(metres: number): string {
-  return `${(metres / 1609.344).toFixed(1)} mi`;
-}
+// Lives beside the other pure results helpers so it can be tested without the API client.
+export { formatDistance } from "@/lib/results/distance";

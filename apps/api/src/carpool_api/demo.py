@@ -233,6 +233,7 @@ def build() -> DemoEvent:
             created_at=_moment(instance.arrival_by - 24 * 60 * 60),
             routes=routes,
             unassigned=[],
+            far_from_road=[],
         ),
     )
 

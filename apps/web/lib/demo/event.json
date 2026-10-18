@@ -91,6 +91,7 @@
   "solution": {
     "algorithm": "lns",
     "created_at": "2026-10-14T23:00:00Z",
+    "far_from_road": [],
     "id": "75651925-f55b-530c-8231-764d7ea0e817",
     "input_version": 1,
     "is_active": true,
@@ -100,6 +101,7 @@
       "churn": 0,
       "drive_s": 6744,
       "driver_detour_s": 1310,
+      "far_from_road": {},
       "gap_to_bound": null,
       "p95_detour_s": 896,
       "passenger_ride_s": 10174,

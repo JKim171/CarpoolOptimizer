@@ -124,6 +124,22 @@ class TestParsing:
         assert estimates.unroutable == frozenset({"a"})
         assert estimates.matrix.duration("b", "c") == 105
 
+    def test_snap_distances_are_read_per_node_and_rounded(self):
+        sources = [{"snapped_distance": 3.4}, {"snapped_distance": 412.6}, {"location": [0, 0]}]
+        payload = {**matrix_payload(), "sources": sources}
+
+        estimates = parse_matrix(payload, [DESTINATION, "a", "b"])
+
+        assert estimates.snapped_m == {DESTINATION: 3, "a": 413}
+
+    @pytest.mark.parametrize("sources", [None, [], [{"snapped_distance": 1.0}], "x"])
+    def test_odd_snap_distances_never_refuse_the_answer(self, sources):
+        """They are a hint for the organizer, not part of the travel times."""
+        estimates = parse_matrix({**matrix_payload(), "sources": sources}, [DESTINATION, "a", "b"])
+
+        assert estimates.snapped_m == {}
+        assert estimates.provider == "ors"
+
     def test_a_routable_roster_leaves_nobody_out(self):
         assert parse_matrix(matrix_payload(), [DESTINATION, "a", "b"]).unroutable == frozenset()
 
