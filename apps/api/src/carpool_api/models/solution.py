@@ -146,7 +146,7 @@ class UnassignedParticipant(Base):
     participant_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("participants.id", ondelete="CASCADE"), primary_key=True
     )
-    #: no_capacity | detour_exceeded | time_window | no_drivers
+    #: no_capacity | detour_exceeded | time_window | no_drivers | unroutable
     reason: Mapped[str] = mapped_column(Text)
 
     solution: Mapped[Solution] = relationship(back_populates="unassigned")

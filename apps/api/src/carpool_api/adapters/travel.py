@@ -29,7 +29,14 @@ from typing import Protocol
 import httpx
 
 from carpool_api.config import Settings
-from carpool_domain import Location, NodeId, TravelMatrix, haversine_matrix, haversine_meters
+from carpool_domain import (
+    DESTINATION,
+    Location,
+    NodeId,
+    TravelMatrix,
+    haversine_matrix,
+    haversine_meters,
+)
 
 #: A plausible urban average. Deliberately not tuned: a fictional speed tuned to look accurate is
 #: worse than an obviously rough one, and Week 4 replaces this with measured road times.
@@ -47,6 +54,10 @@ class TravelEstimates:
     _distances_m: Mapping[tuple[NodeId, NodeId], int]
     #: "ors" or "haversine". Recorded on the solution, so an answer built on estimates says so.
     provider: str = "haversine"
+    #: Participants the provider could not route to or from. Neither table covers them: they are
+    #: left out of the solve and reported as unassigned, rather than sending everyone else to
+    #: estimates (docs/design.md 4.4).
+    unroutable: frozenset[NodeId] = frozenset()
 
     def distance_m(self, origin: NodeId, destination: NodeId) -> int:
         """Metres from `origin` to `destination`, mirroring `TravelMatrix.duration`'s contract:
@@ -111,46 +122,90 @@ class Haversine:
 _MATRIX_PATH = "/openrouteservice/v2/matrix/driving-car"
 
 
-def _table(payload: dict[str, object], name: str, size: int) -> list[list[float]]:
+def _table(payload: dict[str, object], name: str, size: int) -> list[list[float | None]]:
     """One square table out of the response, or `TravelUnavailable` if it is not one.
 
-    A `null` cell is an unroutable point -- an address the provider could not snap to a road. It is
-    refused here rather than guessed at, and the whole solve falls back to estimates: silently
-    filling one pair with a straight-line number would mix two providers in one answer that claims
-    to be road times. Naming the person instead, as an `unassigned` reason, is the better eventual
-    answer (docs/design.md 4.4); it needs the domain to route around a missing pair.
+    A `null` cell is kept as `None`: it means the provider found no road between that pair, which
+    `_unroutable` turns into people to leave out. Anything else that is not a number is a malformed
+    response.
     """
     table = payload.get(name)
     if not isinstance(table, list) or len(table) != size:
         raise TravelUnavailable(f"the matrix response has no {size}x{size} {name} table")
-    rows: list[list[float]] = []
+    rows: list[list[float | None]] = []
     for row in table:
         if not isinstance(row, list) or len(row) != size:
             raise TravelUnavailable(f"the matrix response has a malformed {name} row")
-        if any(cell is None for cell in row):
-            raise TravelUnavailable("a point could not be routed to by road")
-        if not all(isinstance(cell, int | float) for cell in row):
+        if not all(cell is None or isinstance(cell, int | float) for cell in row):
             raise TravelUnavailable(f"the matrix response has a non-numeric {name} cell")
-        rows.append([float(cell) for cell in row])
+        rows.append([None if cell is None else float(cell) for cell in row])
     return rows
+
+
+def _unroutable(tables: list[list[list[float | None]]], order: list[NodeId]) -> frozenset[NodeId]:
+    """Participants whose removal leaves no `null` cell, chosen greedily.
+
+    An address the provider cannot snap to a road nulls its whole row and column, so it has by far
+    the most missing cells and goes first; a pair of points with no road between them (an island)
+    costs one of the two. Filling a missing cell with a straight-line number instead would mix two
+    providers in one answer that claims to be road times.
+
+    The destination is never removed -- without it there is nothing to solve -- so when it is the
+    node with the most missing cells, the solve goes to estimates. So does losing more than half
+    the roster: that is the provider failing, not the addresses.
+    """
+    missing = {
+        (i, j)
+        for table in tables
+        for i, row in enumerate(table)
+        for j, cell in enumerate(row)
+        if i != j and cell is None
+    }
+    removed: set[int] = set()
+    while missing:
+        counts: dict[int, int] = {}
+        for i, j in missing:
+            counts[i] = counts.get(i, 0) + 1
+            counts[j] = counts.get(j, 0) + 1
+        # Most missing cells first. A tie goes against a participant rather than the destination,
+        # then against the earlier node, so the answer is deterministic.
+        worst = max(counts, key=lambda k: (counts[k], order[k] != DESTINATION, -k))
+        if order[worst] == DESTINATION:
+            raise TravelUnavailable("the destination could not be routed to by road")
+        removed.add(worst)
+        missing = {(i, j) for i, j in missing if worst not in (i, j)}
+    if len(removed) * 2 > len(order) - 1:
+        raise TravelUnavailable("most points could not be routed to by road")
+    return frozenset(order[k] for k in removed)
 
 
 def parse_matrix(payload: object, order: list[NodeId]) -> TravelEstimates:
     """Read an ORS matrix response whose rows and columns follow `order`.
 
     Durations arrive as float seconds and distances as float metres; both are rounded to integers
-    here, at the boundary, because the domain is integer seconds throughout (CLAUDE.md).
+    here, at the boundary, because the domain is integer seconds throughout (CLAUDE.md). The tables
+    cover every node but the `unroutable` ones.
     """
     if not isinstance(payload, dict):
         raise TravelUnavailable("the matrix response is not an object")
     durations = _table(payload, "durations", len(order))
     distances = _table(payload, "distances", len(order))
-    pairs = [(i, a, j, b) for i, a in enumerate(order) for j, b in enumerate(order) if a != b]
+    unroutable = _unroutable([durations, distances], order)
+    kept = [(i, node) for i, node in enumerate(order) if node not in unroutable]
+    pairs = [(i, a, j, b) for i, a in kept for j, b in kept if a != b]
     return TravelEstimates(
-        matrix=TravelMatrix({(a, b): round(durations[i][j]) for i, a, j, b in pairs}),
-        _distances_m={(a, b): round(distances[i][j]) for i, a, j, b in pairs},
+        matrix=TravelMatrix({(a, b): round(_cell(durations, i, j)) for i, a, j, b in pairs}),
+        _distances_m={(a, b): round(_cell(distances, i, j)) for i, a, j, b in pairs},
         provider="ors",
+        unroutable=unroutable,
     )
+
+
+def _cell(table: list[list[float | None]], i: int, j: int) -> float:
+    cell = table[i][j]
+    # `_unroutable` removed every node on a missing cell; reaching one here is a bug in it.
+    assert cell is not None, f"missing cell {i},{j} survived"
+    return cell
 
 
 class OrsMatrix:

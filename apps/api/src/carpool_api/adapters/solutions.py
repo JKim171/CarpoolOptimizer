@@ -42,6 +42,11 @@ REASON_BY_CONSTRAINT = {
 }
 
 
+#: Not a constraint: the routing provider could not reach this person's address by road, so they
+#: were never part of the instance (`adapters/travel.py`).
+UNROUTABLE = "unroutable"
+
+
 def _moment(epoch_seconds: int) -> datetime:
     """Epoch seconds back to an aware UTC timestamp. The column is `timestamptz`; a naive value here
     would be read as server-local time and shift every ETA."""
@@ -75,7 +80,7 @@ def solution_metrics(
         "passenger_ride_s": breakdown.passenger_ride_seconds,
         "driver_detour_s": breakdown.driver_detour_seconds,
         "p95_detour_s": _percentile(detours, 0.95),
-        "unassigned": len(solution.unassigned),
+        "unassigned": len(solution.unassigned) + len(loaded.estimates.unroutable),
         "churn": breakdown.churn,
         "gap_to_bound": None,
         #: "ors" for road times, "haversine" for straight-line estimates -- which every number
@@ -158,6 +163,11 @@ def build_solution_rows(
                 participant_id=uuid.UUID(node_id),
                 reason=REASON_BY_CONSTRAINT[unassigned_reason(loaded.instance, solution, node_id)],
             )
+        )
+    # Left out before the solve, so no constraint bound them: the provider found no road to them.
+    for node_id in sorted(loaded.estimates.unroutable):
+        record.unassigned.append(
+            models.UnassignedParticipant(participant_id=uuid.UUID(node_id), reason=UNROUTABLE)
         )
 
     return record

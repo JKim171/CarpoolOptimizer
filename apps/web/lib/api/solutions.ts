@@ -103,6 +103,7 @@ const UNASSIGNED_REASON: Record<string, string> = {
   detour_exceeded: "Picking them up would take a driver too far off their route.",
   time_window: "No car could reach them and still arrive on time.",
   no_drivers: "Nobody on this roster is driving.",
+  unroutable: "Their address isn't near a road we can route to. Check their pin on the map.",
 };
 
 export function describeUnassigned(reason: string): string {

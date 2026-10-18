@@ -292,9 +292,13 @@ point and becomes an `unassigned` reason, not a crash; each point's `snapped_dis
 because a snap of hundreds of metres is a free signal that an address geocoded wrong (§7.2).
 
 **When the matrix request fails, the solve runs on haversine estimates rather than failing**
-(built 2026-10-17, `adapters/travel.py`). A quota-exhausted 429, a timeout, a malformed body and a
-`null` cell all take that path — a `null` cell for now, until the domain can route around a missing
-pair and report the person as unassigned instead. The answer records `metrics.travel = "haversine"`,
+(built 2026-10-17, `adapters/travel.py`). A quota-exhausted 429, a timeout and a malformed body
+take that path. A `null` cell does not: an address that cannot be snapped to a road nulls its whole
+row and column, so the participants that account for every missing cell (chosen greedily) are left
+out of the instance and reported as unassigned with reason `unroutable`, and everyone else is
+solved on road times. The domain never sees a missing pair. Only an unroutable destination, or
+losing more than half the roster, still falls back to estimates. A rider pinned to a driver left
+out this way is solved unpinned. The answer records `metrics.travel = "haversine"`,
 and its job's fingerprint is re-taken for the provider that actually answered, so the next request
 for the same problem asks ORS again instead of being handed the estimate. The configured provider
 is part of `input_fingerprint`, so adding the key to a deployment does not reuse a single answer
@@ -454,7 +458,7 @@ route_stops (
 unassigned_participants (
   solution_id    uuid not null references solutions(id) on delete cascade,
   participant_id uuid not null references participants(id) on delete cascade,
-  reason         text not null,   -- no_capacity|detour_exceeded|time_window|no_drivers
+  reason         text not null,   -- no_capacity|detour_exceeded|time_window|no_drivers|unroutable
   primary key (solution_id, participant_id)
 );
 

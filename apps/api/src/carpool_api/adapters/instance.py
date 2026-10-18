@@ -134,9 +134,18 @@ def build_instance(
     straight-line estimates stand in when it is omitted."""
     nodes = nodes_of(roster, destination)
     rows = {str(row.id): row for row, _, _ in roster}
+    if estimates is None:
+        estimates = haversine_estimates(nodes)
+    # Nobody the provider could not route is solved for: they are written back as unassigned
+    # (`build_solution_rows`). A pin to such a driver is dropped for this solve rather than
+    # stranding the rider -- the driver they asked for is not in this plan either way.
+    unroutable = estimates.unroutable
     participants = []
     for row, _, _ in roster:
         node_id = str(row.id)
+        if node_id in unroutable:
+            continue
+        pinned = None if row.pinned_driver_id is None else str(row.pinned_driver_id)
         participants.append(
             DomainParticipant(
                 id=node_id,
@@ -149,16 +158,12 @@ def build_instance(
                 max_detour_seconds=(
                     None if row.max_detour_minutes is None else row.max_detour_minutes * 60
                 ),
-                pinned_driver_id=(
-                    None if row.pinned_driver_id is None else str(row.pinned_driver_id)
-                ),
+                pinned_driver_id=None if pinned in unroutable else pinned,
                 needs_outbound=row.needs_outbound,
                 needs_return=row.needs_return,
             )
         )
 
-    if estimates is None:
-        estimates = haversine_estimates(nodes)
     instance = ProblemInstance(
         destination=destination,
         arrival_by=int(event.arrival_at.timestamp()),

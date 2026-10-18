@@ -87,14 +87,67 @@ class TestParsing:
     def test_the_answer_says_it_is_road_times(self):
         assert parse_matrix(matrix_payload(), [DESTINATION, "a", "b"]).provider == "ors"
 
-    def test_an_unroutable_point_is_refused_not_guessed(self):
-        """A null cell would otherwise need a number from somewhere, and any number put there is a
-        straight-line guess passing as a road time."""
+    def test_an_unroutable_point_is_left_out_not_guessed(self):
+        """An address that cannot be snapped nulls its whole row and column. Any number put in
+        those cells would be a straight-line guess passing as a road time, so the person goes."""
         durations = [row[:] for row in DURATIONS]
+        for k in range(3):
+            if k != 2:
+                durations[2][k] = durations[k][2] = None
+
+        estimates = parse_matrix(matrix_payload(durations=durations), [DESTINATION, "a", "b"])
+
+        assert estimates.unroutable == frozenset({"b"})
+        assert estimates.provider == "ors"
+        assert estimates.matrix.duration("a", DESTINATION) == 610
+        with pytest.raises(KeyError):
+            estimates.matrix.duration("a", "b")
+        with pytest.raises(KeyError):
+            estimates.distance_m(DESTINATION, "b")
+
+    def test_a_null_distance_counts_as_much_as_a_null_duration(self):
+        distances = [row[:] for row in DISTANCES]
+        distances[0][1] = distances[1][0] = distances[1][2] = distances[2][1] = None
+
+        estimates = parse_matrix(matrix_payload(distances=distances), [DESTINATION, "a", "b"])
+
+        assert estimates.unroutable == frozenset({"a"})
+
+    def test_one_missing_pair_costs_one_of_the_two(self):
+        """Two points with no road between them -- an island -- need only one of them gone."""
+        nodes = [DESTINATION, "a", "b", "c", "d"]
+        durations = [[0.0 if i == j else 100.0 + i + j for j in range(5)] for i in range(5)]
         durations[1][2] = None
 
-        with pytest.raises(TravelUnavailable, match="routed"):
-            parse_matrix(matrix_payload(durations=durations), [DESTINATION, "a", "b"])
+        estimates = parse_matrix({"durations": durations, "distances": durations}, nodes)
+
+        assert estimates.unroutable == frozenset({"a"})
+        assert estimates.matrix.duration("b", "c") == 105
+
+    def test_a_routable_roster_leaves_nobody_out(self):
+        assert parse_matrix(matrix_payload(), [DESTINATION, "a", "b"]).unroutable == frozenset()
+
+    def test_an_unroutable_destination_is_unavailable(self):
+        """Without the destination there is nothing to solve, so everyone goes to estimates."""
+        nodes = [DESTINATION, "a", "b", "c"]
+        square = [[0.0 if i == j else 50.0 for j in range(4)] for i in range(4)]
+        for k in (1, 2, 3):
+            square[0][k] = square[k][0] = None
+
+        with pytest.raises(TravelUnavailable, match="destination"):
+            parse_matrix({"durations": square, "distances": square}, nodes)
+
+    def test_losing_most_of_the_roster_is_unavailable(self):
+        """Half the addresses failing at once is the provider failing, not the addresses."""
+        nodes = [DESTINATION, "a", "b", "c"]
+        square = [[0.0 if i == j else 50.0 for j in range(4)] for i in range(4)]
+        for bad in (1, 2):
+            for k in range(4):
+                if k != bad:
+                    square[bad][k] = square[k][bad] = None
+
+        with pytest.raises(TravelUnavailable, match="most"):
+            parse_matrix({"durations": square, "distances": square}, nodes)
 
     @pytest.mark.parametrize(
         "payload",

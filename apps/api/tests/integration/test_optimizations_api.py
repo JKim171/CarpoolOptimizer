@@ -17,7 +17,12 @@ from roster import add, optimize, other_event, person, seed_roster
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from carpool_api.adapters.travel import TravelEstimates, TravelUnavailable, haversine_estimates
+from carpool_api.adapters.travel import (
+    TravelEstimates,
+    TravelUnavailable,
+    haversine_estimates,
+    parse_matrix,
+)
 from carpool_domain import Location, NodeId
 
 
@@ -909,3 +914,117 @@ async def test_an_answer_on_estimates_is_not_reused_once_road_times_exist(
     after = await optimize(api_client, organizer_event)
 
     assert after["job_id"] != before["job_id"]
+
+
+class Unroutable:
+    """A matrix provider that cannot snap some participants to a road, answering the way ORS does:
+    a whole row and column of nulls for each, read by the real parser."""
+
+    provider = "ors"
+
+    def __init__(self, *participant_ids: str) -> None:
+        self.unroutable = set(participant_ids)
+
+    async def estimates(self, nodes: Mapping[NodeId, Location]) -> TravelEstimates:
+        order = list(nodes)
+        straight = haversine_estimates(nodes)
+        square: list[list[float | None]] = [
+            [
+                None
+                if a != b and (a in self.unroutable or b in self.unroutable)
+                else float(straight.matrix.duration(a, b))
+                for b in order
+            ]
+            for a in order
+        ]
+        return parse_matrix({"durations": square, "distances": square}, order)
+
+
+async def _unassigned(
+    client: AsyncClient, event: tuple[str, dict[str, str]], job: dict[str, Any]
+) -> dict[str, str]:
+    public_id, headers = event
+    response = await client.get(
+        f"/v1/events/{public_id}/solutions/{job['solution_id']}", headers=headers
+    )
+    assert response.status_code == 200, response.text
+    return {p["participant_id"]: p["reason"] for p in response.json()["unassigned"]}
+
+
+async def test_an_unroutable_address_leaves_that_person_out_not_the_event_on_estimates(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    travel: Any,
+) -> None:
+    """One address the provider cannot reach used to send everybody to straight-line estimates
+    (docs/design.md 4.4). Now it costs that one person, by name, and the rest get road times."""
+    roster = await seed_roster(api_client, organizer_event)
+    travel.current = Unroutable(roster["east"]["id"])
+
+    job = await optimize(api_client, organizer_event)
+
+    metrics = await _metrics(engine, job["solution_id"])
+    assert job["status"] == "succeeded"
+    assert metrics["travel"] == "ors"
+    assert metrics["unassigned"] == 1
+    assert await _unassigned(api_client, organizer_event, job) == {
+        roster["east"]["id"]: "unroutable"
+    }
+    riders = await _drivers_of(engine, job["solution_id"])
+    assert set(riders) == {roster["west"]["id"], roster["north"]["id"]}
+
+
+async def test_an_unroutable_driver_leaves_their_pinned_rider_to_another_car(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    travel: Any,
+) -> None:
+    """The driver the rider asked for is not in this plan either way, so the pin is dropped for
+    this solve rather than stranding the rider as if no car had room."""
+    gone = await add(
+        api_client, organizer_event, person("Sam", "driver", role="driver", seats_available=3)
+    )
+    kept = await add(
+        api_client, organizer_event, person("Kit", "north", role="driver", seats_available=3)
+    )
+    rider = await add(
+        api_client, organizer_event, person("Ada", "east", pinned_driver_id=gone["id"])
+    )
+    travel.current = Unroutable(gone["id"])
+
+    job = await optimize(api_client, organizer_event)
+
+    assert job["status"] == "succeeded"
+    assert await _unassigned(api_client, organizer_event, job) == {gone["id"]: "unroutable"}
+    assert await _drivers_of(engine, job["solution_id"]) == {rider["id"]: kept["id"]}
+
+
+async def test_a_re_solve_survives_losing_a_driver_the_active_plan_used(
+    api_client: AsyncClient,
+    organizer_event: tuple[str, dict[str, str]],
+    engine: AsyncEngine,
+    travel: Any,
+) -> None:
+    """The previous answer names a car the instance no longer has; the warm start has to drop it
+    rather than fail validation."""
+    gone = await add(
+        api_client, organizer_event, person("Sam", "driver", role="driver", seats_available=3)
+    )
+    kept = await add(
+        api_client, organizer_event, person("Kit", "north", role="driver", seats_available=3)
+    )
+    ada = await add(api_client, organizer_event, person("Ada", "east"))
+    bo = await add(api_client, organizer_event, person("Bo", "west"))
+    first = await optimize(api_client, organizer_event)
+    await _activate(api_client, organizer_event, first)
+
+    travel.current = Unroutable(gone["id"])
+    second = await optimize(api_client, organizer_event, json={"preserve_previous": True})
+
+    assert second["status"] == "succeeded"
+    assert await _drivers_of(engine, second["solution_id"]) == {
+        ada["id"]: kept["id"],
+        bo["id"]: kept["id"],
+    }

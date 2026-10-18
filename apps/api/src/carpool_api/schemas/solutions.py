@@ -89,7 +89,7 @@ class SolutionGeometry(BaseModel):
 class UnassignedRead(BaseModel):
     participant_id: uuid.UUID
     display_name: str
-    #: no_capacity | detour_exceeded | time_window | no_drivers
+    #: no_capacity | detour_exceeded | time_window | no_drivers | unroutable
     reason: str
 
 
