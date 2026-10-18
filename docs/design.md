@@ -124,8 +124,8 @@ public launch**, not polish — none is needed for club tennis, whose roster the
 
 ### Honest framing
 
-At n ≈ 40 in a dense cluster, an exact solver runs in well under a second. The async job
-infrastructure in this design is **not** justified by solver runtime. It is justified by travel
+At the 50-person cap, greedy runs in milliseconds and LNS stops at a one-second budget. The async
+job infrastructure in this design is **not** justified by solver runtime. It is justified by travel
 matrix construction against a rate-limited external routing provider, and by the need for durable,
 retryable, idempotent job semantics when a solve is triggered from a phone on campus wifi. Claiming
 otherwise would be inaccurate. §4.2 lists the specific failure modes.
@@ -907,18 +907,33 @@ Every solver below competes only on assignment; none of them can produce a badly
 | # | Algorithm | Role | Scale | v1? |
 |---|---|---|---|---|
 | 1 | **Greedy insertion** — passengers sorted by distance from destination desc., each inserted at the cheapest feasible position | Baseline; always produces a feasible answer | any | ✅ |
-| 2 | **CP-SAT (OR-Tools)** exact model | Ground truth; proves optimality for n ≲ 40 and yields the optimality gap. **Benchmarks only — never run on a user request** | small | ✅ |
+| 2 | **CP-SAT (OR-Tools)** exact model — set partitioning over every car that could exist | Ground truth; proved optimality on every benchmark instance up to the 50-person cap and yields the optimality gap. **Benchmarks only — never run on a user request** | ≤ 50 | ✅ |
 | 3 | **LNS** — ruin-and-recreate with relocate / swap / 2-opt under simulated-annealing acceptance | The production algorithm; hand-written against this objective | 1000+ | ✅ |
 
 **Production runs greedy, then LNS within a time budget. CP-SAT is a measuring instrument, not a
 product feature.** A proven optimum and an LNS answer within a few percent differ by seconds of
 driving in a dense campus cluster, which no user can perceive (§2: the value is coordination, not
-mileage). Meanwhile CP-SAT costs ~400 MB per solve on a 2 GB host, has high runtime variance, and
-the 50-participant cap (§2.4) sits past the ~40 where it reliably proves optimality. Keeping it out
-of production also keeps OR-Tools out of the production image — it is a benchmark-only
-dependency. *Trigger to revisit:* the benchmarks show LNS more than ~5% off optimal on 20–25
-participant instances; then run CP-SAT with a time limit for small events and fall back to LNS.
-The strategy interface makes that a configuration change.
+mileage). Meanwhile the exact model, measured (`docs/benchmarks/`), takes up to 74 s and 10.6 GB to
+prove a 50-person instance optimal: far past the one-second inline budget and five times the
+host's memory. Keeping it out of production also keeps OR-Tools out of the production image — it
+is a benchmark-only dependency. *Trigger to revisit:* the benchmarks show LNS more than ~5% off
+optimal on 20–25 participant instances; then run CP-SAT with a time limit for small events and
+fall back to LNS. The strategy interface makes that a configuration change.
+
+**Measured against that trigger (`docs/benchmarks/`, synthetic instances):** with seats for
+everyone, LNS lands 0.19% above optimal on average at n = 20 (worst 1.7%) and 1.44% at n = 50
+(worst 6.4%), so the trigger is not met. In seat-short events (driver ratio 0.2, about a quarter
+of riders unseatable) it lands 5.6% above at n = 20 (worst 12.1%) and 43.5% at n = 50 — the
+trigger is met there, and choosing who is left out is where the heuristics are weakest.
+
+Why the exact model reaches the cap at all: sequencing is exact and local to one car (§8.2), so a
+car's cost depends only on who is in it. Every (driver, set of riders that fits) pair is
+enumerated and priced up front with the solvers' own Held–Karp sequencer, and CP-SAT picks one
+car per driver so that each rider is in exactly one or left out. The linear relaxation of that
+set-partitioning model is tight; an arc-based routing model, which must rediscover sequencing
+inside the search, is not. It refuses instances with detour caps or departure windows, where the
+cheapest ordering of a car may be infeasible when a dearer one is not, and flexible drivers,
+which it does not price.
 | 4 | **Min-cost flow** relaxation | Lower bound + warm start | any | stretch |
 | 5 | **OR-Tools Routing** (CVRP, single depot) | Mid-scale reference point | ≤ 300 | later |
 
@@ -951,8 +966,17 @@ Synthetic instance generator, fixed seeds, three spatial distributions:
 
 Grid: n ∈ {20, 50, 100, 250, 500, 1000} × driver ratio ∈ {0.2, 0.35, 0.5}.
 
-Per cell record: objective, vehicles used, mean and p95 passenger detour, wall-clock runtime, and
-gap to the CP-SAT bound where available. Commit results as JSON; render charts from that JSON.
+Per cell record: objective and its components, vehicles used, p95 driver detour (the API's
+`p95_detour_s`), wall-clock runtime, LNS iterations, and the CP-SAT optimum and bound where
+available. Results are committed as JSON with the machine they ran on, and the tables in
+`docs/benchmarks/` are rendered from it (`make bench`, `make bench-report`). LNS runs on
+production's one-second budget, so its quality depends a little on the machine; instances are
+generated without flexible drivers, the shape production solves (§2.3).
+
+**Gap** is measured against the optimum's *routing cost* — the objective less the unassigned
+penalty. In a seat-short event every solver pays that penalty for the same number of riders, and
+dividing by it would shrink every gap tenfold; a solver that strands one rider more than the
+optimum still shows the whole penalty in its gap.
 
 **Run a small subset in CI as a regression gate** — if a refactor degrades solution quality by more
 than a threshold, the build fails. Unit and property tests cannot catch this: a refactor can keep
