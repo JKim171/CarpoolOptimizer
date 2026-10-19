@@ -20,9 +20,14 @@ import pytest
 from carpool_bench import exact, harness
 from carpool_domain import Distribution, evaluate, greedy, lns
 
-#: Close to what production's one-second budget buys on a seat-short 50-person event. A longer run
-#: lets instances this small converge whatever the search does, which would hide a regression.
-ITERATIONS = 600
+#: Under half of what production's one-second budget buys on a seat-short 50-person event. A much
+#: longer run lets instances this small converge whatever the search does, which would hide a
+#: regression.
+ITERATIONS = 1_500
+
+#: Search seeds per instance. One run of a randomized search on a short budget is noisy enough that
+#: a single seed cannot tell a regression from bad luck.
+SEEDS = (0, 1, 2)
 
 #: (n, driver ratio, distribution) -> (optimal objective, its routing cost), all with seed 1.
 OPTIMA = {
@@ -46,13 +51,14 @@ def _case(key):
     return harness.Case(n, ratio, distribution, 1)
 
 
-#: With seats for everyone, at the measured worst of 1.89%.
+#: With seats for everyone, at the measured worst of 2.04%.
 ROOMY_WORST = 0.025
-#: Seat-short (a fifth driving), at a measured mean of 2.27% and worst of 5.91%. Without LNS's
-#: cheapest-first start these were 4.04% and 14.5%, without its cheapest-first rebuilds 5.82% and
-#: 14.0%, and without either 9.21% and 28.8%.
-SHORT_MEAN = 0.03
-SHORT_WORST = 0.08
+#: Seat-short (a fifth driving), at a measured mean of 1.27% and worst of 6.41%. With strict
+#: cheapest-first rebuilds (`SEAT_NOISE` 0) these were 2.80% and 12.9%, and without cheapest-first
+#: rebuilds 5.09% and 18.6%. At this budget the search recovers from greedy's start, so the
+#: cheapest-first start is checked by `test_lns` instead.
+SHORT_MEAN = 0.015
+SHORT_WORST = 0.07
 
 
 @pytest.fixture(scope="module")
@@ -61,8 +67,10 @@ def gaps():
     for key, (optimum, routing) in OPTIMA.items():
         case = _case(key)
         instance = case.instance()
-        searched = lns.solve(instance, initial=greedy.solve(instance), iterations=ITERATIONS)
-        found[case] = (evaluate(instance, searched).total - optimum) / routing
+        start = greedy.solve(instance)
+        for seed in SEEDS:
+            searched = lns.solve(instance, initial=start, iterations=ITERATIONS, seed=seed)
+            found[case, seed] = (evaluate(instance, searched).total - optimum) / routing
     return found
 
 
@@ -81,15 +89,18 @@ def test_lns_never_appears_to_beat_a_recorded_optimum(gaps):
 
 
 def _describe(gaps):
-    return {f"n={c.n} {c.driver_ratio} {c.distribution.value}": f"{g:.2%}" for c, g in gaps.items()}
+    return {
+        f"n={c.n} {c.driver_ratio} {c.distribution.value} seed {seed}": f"{g:.2%}"
+        for (c, seed), g in gaps.items()
+    }
 
 
 def test_lns_stays_near_optimal_when_everyone_fits(gaps):
-    roomy = {c: g for c, g in gaps.items() if c.driver_ratio == 0.35}
+    roomy = {k: g for k, g in gaps.items() if k[0].driver_ratio == 0.35}
     assert max(roomy.values()) <= ROOMY_WORST, _describe(roomy)
 
 
 def test_lns_stays_near_optimal_when_seats_run_short(gaps):
-    short = {c: g for c, g in gaps.items() if c.driver_ratio == 0.2}
+    short = {k: g for k, g in gaps.items() if k[0].driver_ratio == 0.2}
     assert statistics.mean(short.values()) <= SHORT_MEAN, _describe(short)
     assert max(short.values()) <= SHORT_WORST, _describe(short)

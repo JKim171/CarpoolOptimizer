@@ -30,7 +30,8 @@ whatever it does, and choosing who is most of the cost (docs/benchmarks/). Seati
 furthest-first, which is greedy's order and usually right, spends the last seats on exactly the
 riders dearest to carry. So in a seat-short event the search also starts from a construction that
 seats whoever is cheapest next, when that beats its starting point, and rebuilds that way where it
-would otherwise rebuild furthest-first.
+would otherwise rebuild furthest-first -- loosely, with each rider's price scaled at random, so
+that successive rebuilds try leaving out different people.
 """
 
 from __future__ import annotations
@@ -58,6 +59,12 @@ START_WORSE_FRACTION = 0.05
 #: Final temperature as a fraction of the starting one. Low enough that the last stretch of the
 #: search is effectively a descent.
 END_TEMPERATURE_RATIO = 0.005
+
+#: How far a seat-short rebuild strays from strict cheapest-first: each rider's price is scaled by
+#: a factor drawn from 1 +/- this before the cheapest is chosen. Strict order rebuilds the same
+#: few cars the same way every time; with this much, the search finds better answers within its
+#: budget (docs/benchmarks/).
+SEAT_NOISE = 0.5
 
 #: Memo tables are dropped wholesale past this many entries, which bounds memory on long searches.
 _CACHE_LIMIT = 200_000
@@ -271,7 +278,7 @@ class _Search:
         matrix_to_venue = {r: instance.matrix.duration(r, DESTINATION) for r in order}
         style = self.rng.random()
         if cheapest or (style < 0.5 and self.seat_short):
-            self._seat_cheapest_first(state, [r for r in order if r in pool])
+            self._seat_cheapest_first(state, [r for r in order if r in pool], noisy=not cheapest)
             return
         if style < 0.5:
             order.sort(key=lambda r: -matrix_to_venue[r])
@@ -293,11 +300,16 @@ class _Search:
         else:
             state.routes[offer[0]] = offer[1]
 
-    def _seat_cheapest_first(self, state: _State, riders: list[str]) -> None:
-        """Seat `riders` one at a time, always whichever is cheapest to seat next."""
+    def _seat_cheapest_first(self, state: _State, riders: list[str], *, noisy: bool) -> None:
+        """Seat `riders` one at a time, always whichever is cheapest to seat next -- or, when
+        `noisy`, whichever is cheapest once each rider's price is scaled by a random factor fixed
+        for this rebuild, which varies who is left out from one rebuild to the next."""
         offers = {r: self._offer(state, r) for r in riders}
+        scale = {r: 1 + SEAT_NOISE * (2 * self.rng.random() - 1) if noisy else 1.0 for r in riders}
         while offers:
-            seatable = [(offer[2], r) for r, offer in offers.items() if offer is not None]
+            seatable = [
+                (offer[2] * scale[r], r) for r, offer in offers.items() if offer is not None
+            ]
             if not seatable:
                 state.unassigned.update(offers)
                 return

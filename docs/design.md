@@ -921,19 +921,24 @@ optimal on 20–25 participant instances; then run CP-SAT with a time limit for 
 fall back to LNS. The strategy interface makes that a configuration change.
 
 **Measured against that trigger (`docs/benchmarks/`, synthetic instances):** with seats for
-everyone, LNS lands 0.19% above optimal on average at n = 20 (worst 1.7%) and 0.72% at n = 50
-(worst 2.8%). In seat-short events (driver ratio 0.2, about a quarter of riders unseatable) it
-lands 0.72% above at n = 20 (worst 3.7%) and 7.8% at n = 50 (worst 11.7%). The trigger is not met.
+everyone, LNS lands 0.19% above optimal on average at n = 20 (worst 1.7%) and 0.33% at n = 50
+(worst 2.0%). In seat-short events (driver ratio 0.2, about a quarter of riders unseatable) it
+lands 0.31% above at n = 20 (worst 1.3%) and 4.8% at n = 50 (worst 9.9%). The trigger is not met.
 
 It was, on the first measurement: seat-short events were 5.6% off at n = 20 and 43.5% at n = 50.
 Choosing who is left out is most of the cost there, and two things made LNS bad at it. Greedy's
 furthest-first order spends the last seats on the riders dearest to carry, and the search
 inherited that order in half its rebuilds; and every insertion into a full car paid for a
 feasibility check per position before failing on seats, so a seat-short 50-person search managed
-71 iterations a second. LNS now refuses a full car before pricing it (about 1,200 iterations a
-second there), and in seat-short events starts from, and rebuilds by, seating whoever is
-cheapest next. A move swapping a stranded rider for a seated one was tried as well and measured
-no better, so it is not there.
+71 iterations a second. LNS now refuses a full car before pricing it, remembers each rider's
+best place in each car across moves (together, about 2,800 iterations a second there), and in
+seat-short events starts from, and rebuilds by, seating whoever is cheapest next. Those rebuilds
+scale each rider's price by a random factor within ±50% before choosing, so that successive
+rebuilds try leaving out different people; before the memo and the noise it was 7.8% off at
+n = 50 (worst 11.7%). Tried and measured no better: a move swapping a stranded rider for a
+seated one, regret insertion, larger ruins, emptying several neighbouring cars at once, and
+rebuilding cheapest-first every time. What remains at n = 50 is not only speed: before the noise,
+twenty thousand iterations, several seconds' worth, still left it 4.0% off.
 
 Why the exact model reaches the cap at all: sequencing is exact and local to one car (§8.2), so a
 car's cost depends only on who is in it. Every (driver, set of riders that fits) pair is
