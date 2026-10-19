@@ -108,6 +108,7 @@ class _Search:
         )
         self._costs: dict[Route, float] = {}
         self._sequenced: dict[Route, Route] = {}
+        self._insertions: dict[tuple[Route, str], tuple[Route, float] | None] = {}
 
         matrix = instance.matrix
         drivers = [p.id for p in instance.participants if p.role.can_drive]
@@ -163,6 +164,19 @@ class _Search:
         """The churn charge for seating `rider` with `driver`."""
         before = self.previous_driver.get(rider)
         return self.instance.weights.churn if before is not None and before != driver else 0.0
+
+    def insertion(self, route: Route, rider: str) -> tuple[Route, float] | None:
+        """`greedy.best_insertion`, remembered. Most cars come through a move unchanged, so the
+        same rider is priced into the same car over and over, above all when seating
+        cheapest-first."""
+        key = (route, rider)
+        if key not in self._insertions:
+            if len(self._insertions) > _CACHE_LIMIT:
+                self._insertions.clear()
+            self._insertions[key] = greedy.best_insertion(
+                self.instance, route, rider, cost=self.route_cost
+            )
+        return self._insertions[key]
 
     def tidy(self, route: Route) -> Route:
         """`route` optimally ordered, or as it was when the optimal order breaks a detour cap."""
@@ -242,11 +256,7 @@ class _Search:
                 state.routes[target] = Route(target)
                 pool.discard(target)
             route = state.routes.get(target)
-            insertion = (
-                greedy.best_insertion(instance, route, rider, cost=self.route_cost)
-                if route is not None
-                else None
-            )
+            insertion = self.insertion(route, rider) if route is not None else None
             if insertion is None:
                 state.unassigned.add(rider)
             else:
@@ -315,7 +325,7 @@ class _Search:
             if route is None:
                 continue
             seen += 1
-            insertion = greedy.best_insertion(instance, route, rider, cost=self.route_cost)
+            insertion = self.insertion(route, rider)
             if insertion is not None:
                 price = insertion[1] + self.moved(rider, driver)
                 if best is None or price < best[2]:
@@ -411,12 +421,8 @@ class _Search:
         pins = {self.instance.participant(r).pinned_driver_id for r in (a, b)}
         if pins - {None}:
             return None
-        into_b = greedy.best_insertion(
-            self.instance, _without(state.routes[car_b], b), a, cost=self.route_cost
-        )
-        into_a = greedy.best_insertion(
-            self.instance, _without(state.routes[car_a], a), b, cost=self.route_cost
-        )
+        into_b = self.insertion(_without(state.routes[car_b], b), a)
+        into_a = self.insertion(_without(state.routes[car_a], a), b)
         if into_a is None or into_b is None:
             return None
         state.routes[car_a], state.routes[car_b] = into_a[0], into_b[0]
