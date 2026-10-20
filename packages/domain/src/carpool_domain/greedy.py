@@ -115,6 +115,9 @@ def solve(
             else:
                 routes[target] = insertion[0]
             continue
+        if rider.id in routes:
+            # A flexible rider already driving, because someone is pinned to their car.
+            continue
 
         candidates = sorted(
             routes.values(),

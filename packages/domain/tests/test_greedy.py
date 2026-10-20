@@ -79,3 +79,19 @@ def test_a_full_car_is_refused_before_any_position_is_priced(instance):
 
     car = Route("d", ("a",), ("a",))
     assert greedy.best_insertion(one_seat, car, "b", cost=unpriceable) is None
+
+
+def test_a_flexible_rider_driving_for_a_pin_is_not_seated_again(instance):
+    # 'b' is pinned to flexible 'a', so 'a' drives -- and must not also be placed as a rider.
+    pinned = replace(
+        instance,
+        participants=(
+            instance.participant("d"),
+            replace(instance.participant("a"), role=Role.EITHER, seats=2),
+            replace(instance.participant("b"), pinned_driver_id="a"),
+        ),
+    )
+    solution = greedy.solve(pinned)
+
+    assert validate(pinned, solution) == []
+    assert solution.driver_of("b") == "a"
