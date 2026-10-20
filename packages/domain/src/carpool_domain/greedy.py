@@ -12,10 +12,10 @@ be several orders of magnitude slower for no better result.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 
 from .models import DESTINATION, ProblemInstance, Role, Route, Solution
-from .objective import route_metrics
+from .objective import evaluate, route_metrics
 from .sequence import resequence
 from .validate import route_feasible
 
@@ -76,10 +76,106 @@ def best_insertion(
     return best
 
 
+def seat_short(instance: ProblemInstance) -> bool:
+    """Fewer seats than riders, so someone is left out whatever a solver does."""
+    seats = sum(p.seats for p in instance.participants if p.role.can_drive)
+    riders = sum(
+        1
+        for p in instance.participants
+        if p.role is not Role.DRIVER and (p.needs_outbound or p.needs_return)
+    )
+    return seats < riders
+
+
+#: Where a rider would go as things stand: the driver, their car with the rider in it, and the
+#: price. A flexible rider's own new car is offered with themselves as the driver.
+Offer = tuple[str, Route, float]
+
+
+def seat_cheapest_first(
+    routes: dict[str, Route],
+    riders: Iterable[str],
+    offer: Callable[[str], Offer | None],
+    *,
+    scale: Mapping[str, float] | None = None,
+) -> list[str]:
+    """Seat `riders` into `routes` one at a time, always whichever is cheapest to seat next, and
+    return whoever is left without a seat.
+
+    `offer` prices one rider against `routes` as they stand. `scale`, when given, multiplies each
+    rider's price before the cheapest is chosen; large neighbourhood search passes random factors,
+    so that successive rebuilds leave out different people.
+    """
+    offers = {r: offer(r) for r in riders}
+    while offers:
+        seatable = [
+            (o[2] * (scale[r] if scale is not None else 1.0), r)
+            for r, o in offers.items()
+            if o is not None
+        ]
+        if not seatable:
+            return sorted(offers)
+        _, rider = min(seatable)
+        chosen = offers.pop(rider)
+        assert chosen is not None
+        driver, route, _ = chosen
+        opened = driver not in routes
+        routes[driver] = route
+        # Only offers into the car that changed are stale -- or, when a car was opened, every
+        # offer, since the new car may be nearer than any that was considered. Offers into other
+        # cars still stand: their cars did not change.
+        for other, standing in offers.items():
+            if opened or (standing is not None and standing[0] == driver):
+                offers[other] = offer(other)
+    return []
+
+
+def _offer(
+    instance: ProblemInstance, routes: dict[str, Route], rider: str, candidate_drivers: int
+) -> Offer | None:
+    """The cheapest place for `rider` among the nearest open cars, or a car of their own."""
+    candidates = sorted(
+        routes.values(),
+        key=lambda r: (instance.matrix.duration(rider, r.driver_id), r.driver_id),
+    )[:candidate_drivers]
+    best: Offer | None = None
+    for route in candidates:
+        insertion = best_insertion(instance, route, rider)
+        if insertion is not None and (best is None or insertion[1] < best[2]):
+            best = (route.driver_id, insertion[0], insertion[1])
+
+    # A flexible rider can drive instead of riding. Opening a car costs the per-vehicle charge
+    # *plus that car's own round trip* -- charging only the former makes a new car look nearly
+    # free and leaves every vehicle half empty.
+    solo = Route(rider)
+    if instance.participant(rider).role.can_drive and route_feasible(instance, solo):
+        solo_cost = instance.weights.vehicle + route_cost(instance, solo)
+        if best is None or best[2] > solo_cost:
+            return (rider, solo, solo_cost)
+    return best
+
+
 def solve(
     instance: ProblemInstance, *, candidate_drivers: int = DEFAULT_CANDIDATE_DRIVERS
 ) -> Solution:
-    """Assign every rider to a car, or record why they could not be."""
+    """Assign every rider to a car, or record why they could not be.
+
+    Riders are seated furthest from the venue first. When there are fewer seats than riders, that
+    order spends the last seats on the riders dearest to carry, so a second construction seats
+    whoever is cheapest next instead, and the cheaper of the two answers is returned.
+    """
+    furthest = _construct(instance, candidate_drivers, cheapest=False)
+    if not seat_short(instance):
+        return furthest
+    cheapest = _construct(instance, candidate_drivers, cheapest=True)
+    return (
+        cheapest
+        if evaluate(instance, cheapest).total < evaluate(instance, furthest).total
+        else furthest
+    )
+
+
+def _construct(instance: ProblemInstance, candidate_drivers: int, *, cheapest: bool) -> Solution:
     routes: dict[str, Route] = {
         p.id: Route(p.id) for p in instance.participants if p.role is Role.DRIVER
     }
@@ -91,7 +187,7 @@ def solve(
 
     # Pins are constraints, not preferences: they claim their seat before greed can spend it.
     # Everyone else is placed furthest-from-the-venue first, because distant riders are the hardest
-    # to fit and the easy ones would otherwise consume the capacity they need.
+    # to fit and the easy ones would otherwise consume the capacity they need -- unless `cheapest`.
     pinned = [p for p in riders if p.pinned_driver_id is not None]
     flexible = sorted(
         (p for p in riders if p.pinned_driver_id is None),
@@ -99,48 +195,35 @@ def solve(
     )
 
     unassigned: list[str] = []
-    for rider in [*pinned, *flexible]:
+    for rider in pinned:
         target = rider.pinned_driver_id
-        if target is not None:
-            if (
-                target not in routes
-                and instance.has(target)
-                and instance.participant(target).role.can_drive
-            ):
-                routes[target] = Route(target)
-            existing = routes.get(target)
-            insertion = best_insertion(instance, existing, rider.id) if existing else None
-            if insertion is None:
-                unassigned.append(rider.id)
-            else:
-                routes[target] = insertion[0]
-            continue
-        if rider.id in routes:
-            # A flexible rider already driving, because someone is pinned to their car.
-            continue
-
-        candidates = sorted(
-            routes.values(),
-            key=lambda r: (instance.matrix.duration(rider.id, r.driver_id), r.driver_id),
-        )[:candidate_drivers]
-        best: tuple[str, Route, float] | None = None
-        for route in candidates:
-            insertion = best_insertion(instance, route, rider.id)
-            if insertion is not None and (best is None or insertion[1] < best[2]):
-                best = (route.driver_id, insertion[0], insertion[1])
-
-        # A flexible rider can drive instead of riding. Opening a car costs the per-vehicle charge
-        # *plus that car's own round trip* -- charging only the former makes a new car look nearly
-        # free and leaves every vehicle half empty.
-        solo = Route(rider.id)
-        can_open = rider.role.can_drive and route_feasible(instance, solo)
-        solo_cost = instance.weights.vehicle + route_cost(instance, solo)
-        if can_open and (best is None or best[2] > solo_cost):
-            routes[rider.id] = solo
-        elif best is not None:
-            routes[best[0]] = best[1]
-        else:
+        assert target is not None
+        if (
+            target not in routes
+            and instance.has(target)
+            and instance.participant(target).role.can_drive
+        ):
+            routes[target] = Route(target)
+        existing = routes.get(target)
+        insertion = best_insertion(instance, existing, rider.id) if existing else None
+        if insertion is None:
             unassigned.append(rider.id)
+        else:
+            routes[target] = insertion[0]
+
+    # A flexible rider may already be driving, because someone is pinned to their car.
+    free = [p.id for p in flexible if p.id not in routes]
+    if cheapest:
+        unassigned += seat_cheapest_first(
+            routes, sorted(free), lambda r: _offer(instance, routes, r, candidate_drivers)
+        )
+    else:
+        for rider_id in free:
+            offer = _offer(instance, routes, rider_id, candidate_drivers)
+            if offer is None:
+                unassigned.append(rider_id)
+            else:
+                routes[offer[0]] = offer[1]
 
     final: list[Route] = []
     for _, route in sorted(routes.items()):

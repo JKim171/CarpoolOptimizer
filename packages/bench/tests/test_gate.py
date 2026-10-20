@@ -53,12 +53,17 @@ def _case(key):
 
 #: With seats for everyone, at the measured worst of 2.04%.
 ROOMY_WORST = 0.025
-#: Seat-short (a fifth driving), at a measured mean of 1.27% and worst of 6.41%. With strict
-#: cheapest-first rebuilds (`SEAT_NOISE` 0) these were 2.80% and 12.9%, and without cheapest-first
-#: rebuilds 5.09% and 18.6%. At this budget the search recovers from greedy's start, so the
-#: cheapest-first start is checked by `test_lns` instead.
+#: Seat-short (a fifth driving), at a measured mean of 1.40% and worst of 6.41%. With strict
+#: cheapest-first rebuilds (`SEAT_NOISE` 0) these were 2.33% and 12.9%, and without cheapest-first
+#: rebuilds 4.67% and 18.6%.
 SHORT_MEAN = 0.015
 SHORT_WORST = 0.07
+
+#: Greedy alone, seat-short, at a measured mean of 9.50% and worst of 27.1%. Seating furthest-first
+#: only, as it did before it also tried cheapest-first, was 68.9% and 84.2%. At this budget the
+#: search recovers from almost any start, so its own thresholds cannot see greedy get worse.
+GREEDY_SHORT_MEAN = 0.11
+GREEDY_SHORT_WORST = 0.30
 
 
 @pytest.fixture(scope="module")
@@ -104,3 +109,16 @@ def test_lns_stays_near_optimal_when_seats_run_short(gaps):
     short = {k: g for k, g in gaps.items() if k[0].driver_ratio == 0.2}
     assert statistics.mean(short.values()) <= SHORT_MEAN, _describe(short)
     assert max(short.values()) <= SHORT_WORST, _describe(short)
+
+
+def test_greedy_leaves_out_the_riders_dearest_to_carry_when_seats_run_short():
+    short = {}
+    for key, (optimum, routing) in OPTIMA.items():
+        if key[1] != 0.2:
+            continue
+        instance = _case(key).instance()
+        short[_case(key), 0] = (
+            evaluate(instance, greedy.solve(instance)).total - optimum
+        ) / routing
+    assert statistics.mean(short.values()) <= GREEDY_SHORT_MEAN, _describe(short)
+    assert max(short.values()) <= GREEDY_SHORT_WORST, _describe(short)

@@ -1,6 +1,18 @@
 from dataclasses import replace
 
-from carpool_domain import Distribution, Role, Route, generate_instance, greedy, validate
+from carpool_domain import (
+    DESTINATION,
+    Distribution,
+    Location,
+    Participant,
+    ProblemInstance,
+    Role,
+    Route,
+    generate_instance,
+    greedy,
+    haversine_matrix,
+    validate,
+)
 
 
 def test_everyone_is_seated_when_there_is_room(instance):
@@ -95,3 +107,30 @@ def test_a_flexible_rider_driving_for_a_pin_is_not_seated_again(instance):
 
     assert validate(pinned, solution) == []
     assert solution.driver_of("b") == "a"
+
+
+def _one_seat_two_riders():
+    """One seat, two riders: `near` sits on the driver's way in, `far` is miles the other way."""
+    venue = Location(43.07, -89.40)
+    people = (
+        Participant("d", Location(43.115, -89.40), role=Role.DRIVER, seats=1),
+        Participant("near", Location(43.0925, -89.40)),
+        Participant("far", Location(43.0, -89.40)),
+    )
+    nodes = {p.id: p.location for p in people} | {DESTINATION: venue}
+    return ProblemInstance(
+        destination=venue,
+        arrival_by=1_000_000,
+        ends_at=1_007_200,
+        participants=people,
+        matrix=haversine_matrix(nodes),
+    )
+
+
+def test_when_seats_run_short_the_rider_dearest_to_carry_is_left_out():
+    # Furthest-first alone reaches `far` first and spends the only seat on them.
+    instance = _one_seat_two_riders()
+    solution = greedy.solve(instance)
+
+    assert validate(instance, solution) == []
+    assert solution.unassigned == ("far",)

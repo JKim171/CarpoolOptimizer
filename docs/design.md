@@ -906,7 +906,7 @@ Every solver below competes only on assignment; none of them can produce a badly
 
 | # | Algorithm | Role | Scale | v1? |
 |---|---|---|---|---|
-| 1 | **Greedy insertion** — passengers sorted by distance from destination desc., each inserted at the cheapest feasible position | Baseline; always produces a feasible answer | any | ✅ |
+| 1 | **Greedy insertion** — passengers sorted by distance from destination desc., each inserted at the cheapest feasible position; when seats run short, also built by seating whoever is cheapest next, keeping the cheaper answer | Baseline; always produces a feasible answer | any | ✅ |
 | 2 | **CP-SAT (OR-Tools)** exact model — set partitioning over every car that could exist | Ground truth; proved optimality on every benchmark instance up to the 50-person cap and yields the optimality gap. **Benchmarks only — never run on a user request** | ≤ 50 | ✅ |
 | 3 | **LNS** — ruin-and-recreate with relocate / swap / 2-opt under simulated-annealing acceptance | The production algorithm; hand-written against this objective | 1000+ | ✅ |
 
@@ -921,9 +921,10 @@ optimal on 20–25 participant instances; then run CP-SAT with a time limit for 
 fall back to LNS. The strategy interface makes that a configuration change.
 
 **Measured against that trigger (`docs/benchmarks/`, synthetic instances):** with seats for
-everyone, LNS lands 0.19% above optimal on average at n = 20 (worst 1.7%) and 0.33% at n = 50
-(worst 2.0%). In seat-short events (driver ratio 0.2, about a quarter of riders unseatable) it
-lands 0.31% above at n = 20 (worst 1.3%) and 4.8% at n = 50 (worst 9.9%). The trigger is not met.
+everyone, LNS found the optimum of every instance at n = 20 and lands 0.32% above it on average
+at n = 50 (worst 2.0%). In seat-short events (driver ratio 0.2, about a quarter of riders
+unseatable) it lands 0.57% above at n = 20 (worst 4.5%) and 5.1% at n = 50 (worst 9.1%). Run to
+run, under the one-second clock, these move by a few tenths of a point. The trigger is not met.
 
 It was, on the first measurement: seat-short events were 5.6% off at n = 20 and 43.5% at n = 50.
 Choosing who is left out is most of the cost there, and two things made LNS bad at it. Greedy's
@@ -932,13 +933,24 @@ inherited that order in half its rebuilds; and every insertion into a full car p
 feasibility check per position before failing on seats, so a seat-short 50-person search managed
 71 iterations a second. LNS now refuses a full car before pricing it, remembers each rider's
 best place in each car across moves (together, about 2,800 iterations a second there), and in
-seat-short events starts from, and rebuilds by, seating whoever is cheapest next. Those rebuilds
-scale each rider's price by a random factor within ±50% before choosing, so that successive
-rebuilds try leaving out different people; before the memo and the noise it was 7.8% off at
-n = 50 (worst 11.7%). Tried and measured no better: a move swapping a stranded rider for a
+seat-short events starts from (greedy now builds it, below), and rebuilds by, seating whoever is
+cheapest next. Those rebuilds scale each rider's price by a random factor within ±50% before
+choosing, so that successive rebuilds try leaving out different people; before the memo and the
+noise it was 7.8% off at n = 50 (worst 11.7%). Tried and measured no better: a move swapping a stranded rider for a
 seated one, regret insertion, larger ruins, emptying several neighbouring cars at once, and
 rebuilding cheapest-first every time. What remains at n = 50 is not only speed: before the noise,
 twenty thousand iterations, several seconds' worth, still left it 4.0% off.
+
+Greedy itself had the same weakness, and it matters on its own: it is the answer to a request for
+`greedy`, and the search's starting point. In seat-short events it now also seats whoever is
+cheapest next and returns the cheaper of the two constructions, since furthest-first still wins
+about one seat-short event in five. That took it from 54% above optimal to 11% at n = 20 (worst
+84% → 21%), and from 74% to 20% at n = 50 (worst 118% → 44%), for about 30 ms at n = 50. Past a
+few hundred people it stops helping: cheapest-first fills the dense areas first, a rider whose
+nearest cars are all full is then left out even with seats free further away, and furthest-first
+wins every instance at n ≥ 250 while greedy pays for both — nearly a second at n = 1000, which
+leaves the search there a third of its former iterations. Production caps events at 50, where
+both constructions leave out the same number of people.
 
 Why the exact model reaches the cap at all: sequencing is exact and local to one car (§8.2), so a
 car's cost depends only on who is in it. Every (driver, set of riders that fits) pair is

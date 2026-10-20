@@ -4,16 +4,10 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from carpool_domain import (
-    DESTINATION,
     Distribution,
-    Location,
-    Participant,
-    ProblemInstance,
-    Role,
     evaluate,
     generate_instance,
     greedy,
-    haversine_matrix,
     lns,
     validate,
 )
@@ -106,38 +100,6 @@ def test_pins_survive_the_search():
 
 
 # -- seat-short events: who is left out -----------------------------------------------------------
-
-
-def _one_seat_two_riders():
-    """One seat, two riders: `near` sits on the driver's way in, `far` is miles the other way."""
-    venue = Location(43.07, -89.40)
-    people = (
-        Participant("d", Location(43.115, -89.40), role=Role.DRIVER, seats=1),
-        Participant("near", Location(43.0925, -89.40)),
-        Participant("far", Location(43.0, -89.40)),
-    )
-    nodes = {p.id: p.location for p in people} | {DESTINATION: venue}
-    return ProblemInstance(
-        destination=venue,
-        arrival_by=1_000_000,
-        ends_at=1_007_200,
-        participants=people,
-        matrix=haversine_matrix(nodes),
-    )
-
-
-def test_greedy_spends_the_last_seat_on_the_dearest_rider():
-    # The failure the seat-short handling exists for: furthest-first reaches `far` first.
-    assert greedy.solve(_one_seat_two_riders()).unassigned == ("near",)
-
-
-def test_a_seat_short_search_leaves_out_the_rider_dearest_to_carry():
-    instance = _one_seat_two_riders()
-    # No moves at all: the answer is where the search starts.
-    solution = lns.solve(instance, initial=greedy.solve(instance), progress=lambda: 1.0)
-
-    assert validate(instance, solution) == []
-    assert solution.unassigned == ("far",)
 
 
 @slow

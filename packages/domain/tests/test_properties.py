@@ -60,3 +60,24 @@ def test_the_objective_is_finite_and_non_negative(instance):
     assert breakdown.total >= 0
     assert breakdown.drive_seconds >= 0
     assert breakdown.vehicles == len(greedy.solve(instance).routes)
+
+
+@slow
+@given(
+    st.builds(
+        generate_instance,
+        n=st.integers(min_value=4, max_value=30),
+        driver_ratio=st.floats(min_value=0.05, max_value=0.25),
+        distribution=st.sampled_from(list(Distribution)),
+        seed=st.integers(min_value=0, max_value=10_000),
+        max_detour_seconds=st.one_of(st.none(), st.integers(min_value=0, max_value=3600)),
+    )
+)
+def test_seating_cheapest_first_never_does_worse_than_furthest_first(instance):
+    # When seats run short greedy builds the answer both ways. Cheapest-first is usually better
+    # there, but not always, and the cheaper of the two is the one that must come back.
+    solution = greedy.solve(instance)
+    furthest = greedy._construct(instance, greedy.DEFAULT_CANDIDATE_DRIVERS, cheapest=False)
+
+    assert validate(instance, solution) == []
+    assert evaluate(instance, solution).total <= evaluate(instance, furthest).total
