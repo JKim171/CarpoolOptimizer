@@ -24,25 +24,25 @@
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
-    "@tanstack/react-query": "5.104.0",
+    "@tanstack/react-query": "5.105.0",
     "@vercel/analytics": "^2.0.1",
-    "maplibre-gl": "^6.11.2",
-    "next": "16.3.6",
+    "maplibre-gl": "^6.16.0",
+    "next": "16.4.3",
     "openapi-fetch": "0.17.0",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^24.19.0",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.4.3",
     "openapi-typescript": "7.13.0",
-    "prettier": "3.9.9",
+    "prettier": "3.9.10",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   }
 }
